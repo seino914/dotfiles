@@ -1,4 +1,4 @@
 # dotfiles
 
-## ファイル一覧
-- `zsh`の設定（MacOS用のターミナルの設定）
+## 設定一覧
+- [zsh](/zsh/README.md)
