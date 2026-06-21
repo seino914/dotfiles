@@ -38,3 +38,13 @@
 cd ~/.claude
 ```
 
+## LINE通知送信数
+LINE通知で送信した数と上限が見れます。
+```zsh
+source ~/.claude/.line-env
+echo "上限:"; curl -s https://api.line.me/v2/bot/message/quota \
+  -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN"; echo
+echo "当月消費:"; curl -s https://api.line.me/v2/bot/message/quota/consumption \
+  -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN"; echo
+```
+
