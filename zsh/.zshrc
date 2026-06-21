@@ -9,13 +9,13 @@ setopt PROMPT_SUBST
 prompt_path() {
   local cwd="$PWD"
 
-  # root の時: "peipou /$"（間は開けない）
+  # root の時: "/$"（間は開けない）
   if [[ $EUID -eq 0 ]]; then
     printf "%s /%s" "$PR_USER" "$PR_RESET"
     return
   fi
 
-  # ホーム: "peipou ~$"
+  # ホーム: "~$"
   if [[ "$cwd" == "$HOME" ]]; then
     printf "%s %s~%s" "$PR_USER" "$PR_PATH" "$PR_RESET"
     return
@@ -29,7 +29,7 @@ prompt_path() {
     return
   fi
 
-  # ルート直下（例: /opt → "peipou /opt$"）
+  # ルート直下（例: /opt → "/opt$"）
   if [[ "$cwd" == /* && "$cwd" != */*/* ]]; then
     printf "%s %s%s%s" "$PR_USER" "$PR_PATH" "$cwd" "$PR_RESET"
     return
