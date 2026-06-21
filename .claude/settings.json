@@ -1,0 +1,29 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/peipou/.claude/hooks/notify-line.sh"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash /Users/peipou/.claude/hooks/notify-line.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "language": "japanese",
+  "effortLevel": "high",
+  "skipWorkflowUsageWarning": true
+}
