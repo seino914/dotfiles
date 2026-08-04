@@ -13,6 +13,7 @@
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成を自動許可するフック |
 | `skills/readme/SKILL.md` | `/readme` スキル：READMEを最新状態に更新（なければ新規作成） |
 | `skills/pr/SKILL.md` | `/pr` スキル：変更をコミット・pushしてGitHubにPRを作成 |
+| `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：ローカルブランチのうちmain・develop以外を削除して整理 |
 | `.line-env.example` | LINE アクセストークン設定のテンプレート |
 | `setup.sh` | `.claude/` 配下の全ファイルを `~/.claude` へシンボリックリンクするスクリプト |
 
@@ -41,6 +42,7 @@ bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
 - `permissions.ask`：`git commit` / `git push` / `gh pr create` / `gh pr merge` は実行前に必ず確認ダイアログを表示
 - `language`：`japanese`
 - `effortLevel`：`high`
+- `tui`：`fullscreen`
 - `skipWorkflowUsageWarning`：`true`
 
 ## Git操作の制限（/pr フロー）
