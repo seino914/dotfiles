@@ -1,5 +1,45 @@
 {
+  "model": "claude-fable-5[1m]",
+  "permissions": {
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)"
+    ]
+  },
   "hooks": {
+    "UserPromptExpansion": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/pr-mode.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/pr-mode.sh"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/pr-mode.sh"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",
@@ -7,6 +47,10 @@
           {
             "type": "command",
             "command": "bash $HOME/.claude/hooks/notify-line.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/pr-mode.sh"
           }
         ]
       }
@@ -25,5 +69,6 @@
   },
   "language": "japanese",
   "effortLevel": "high",
+  "tui": "fullscreen",
   "skipWorkflowUsageWarning": true
 }
