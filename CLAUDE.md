@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## リポジトリの性質
 
-macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は3つ：
+macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は4つ：
 
 - `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills）
 - `zsh/` — zshプロンプト表示のカスタマイズ（`zsh/.zshrc`）
 - `.github/workflows/` — **他リポジトリへコピーして使う配布用テンプレート**。このリポジトリ自身のCIではない
+- `commands/` — 個人用の早見表メモ（Claude Code組み込みコマンド一覧・よく使う操作の控え）。名前は似ているが `.claude/commands/`（カスタムスラッシュコマンド）ではなく、setup.shのリンク対象でもない単なるドキュメント
 
 ## 最重要：`.claude/` の編集は全プロジェクトに即反映される
 
@@ -23,7 +24,7 @@ macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在
 ### 設定の反映
 - `bash .claude/setup.sh` — `.claude/` 配下を `~/.claude` へシンボリックリンク
   - 冪等だが自動実行はされない。**`.claude/` 配下にファイルを追加・削除したら再実行が必要**（スクリプト自体の修正は不要）
-  - リンク対象外：`setup.sh`・`README.md`・`.line-env.example`
+  - リンク対象外：`setup.sh`・`README.md`・`.line-env.example`・`.DS_Store`
   - リンクが実体ファイルで上書きされた場合（claude-code Issue #40857 の既知挙動）は、実体を最新としてリポジトリへ取り込んでからリンクを張り直すセルフヒーリングを持つ
 - `source ~/.zshrc` — zsh設定の反映
 

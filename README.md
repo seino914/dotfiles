@@ -15,6 +15,9 @@ macOSのターミナル（zsh）プロンプト設定と、Claude Codeのグロ�
 ```
 dotfiles/
 ├── README.md
+├── commands/
+│   ├── claude-code.md    # Claude Code組み込みスラッシュコマンド一覧（リファレンス）
+│   └── private.md        # このリポジトリで使えるコマンド・スキルの個人用早見表
 ├── .github/
 │   └── workflows/
 │       └── delete-merged-branch.yml # PRマージ後にheadブランチを自動削除
@@ -30,8 +33,9 @@ dotfiles/
     │   ├── notify-line.sh # Stop/Notification時にLINEへ通知
     │   └── pr-mode.sh     # /pr 実行中だけgit操作を自動許可
     ├── skills/
-    │   ├── pr/SKILL.md    # /pr スキル
-    │   └── readme/SKILL.md # /readme スキル
+    │   ├── pr/SKILL.md            # /pr スキル
+    │   ├── readme/SKILL.md        # /readme スキル
+    │   └── clean-branches/SKILL.md # /clean-branches スキル
     └── README.md
 ```
 
@@ -51,6 +55,7 @@ source ~/.zshrc
 ### Claude Codeスキル
 - `/pr`：現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
+- `/clean-branches`：ローカルブランチのうちmain・develop以外を削除して整理する
 
 ### セットアップスクリプト
 - `bash .claude/setup.sh`：`.claude/`配下を`~/.claude`へシンボリックリンク
@@ -61,6 +66,10 @@ source ~/.zshrc
 mkdir -p .github/workflows
 cp ~/Dev/kaishi/dotfiles/.github/workflows/*.yml .github/workflows/
 ```
+
+### コマンドリファレンス（[commands](/commands/private.md)）
+- `commands/claude-code.md`：Claude Code組み込みスラッシュコマンドの一覧表
+- `commands/private.md`：このリポジトリで使えるスキル・コマンドの個人用早見表
 
 ## 設定一覧
 - [zsh](/zsh/README.md)
