@@ -1,0 +1,13 @@
+# VSCode / Cursor に共通で導入する拡張機能のIDリスト（1行1ID、# で始まる行はコメント）
+# 適用は darwin-rebuild switch 時の activation から install-extensions.sh が行う。
+# ここから削除しても既存環境からはアンインストールされない
+# （homebrew.nix の cleanup = "none" と同方針。新規環境に入らなくなるだけ）
+anthropic.claude-code
+astro-build.astro-vscode
+bierner.markdown-checkbox
+github.vscode-github-actions
+ms-azuretools.vscode-containers
+ms-ceintl.vscode-language-pack-ja
+ms-vscode-remote.remote-containers
+pkief.material-icon-theme
+ritwickdey.liveserver
