@@ -36,4 +36,12 @@ curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh
 sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
 ```
 
+### パッケージの更新
+
+```zsh
+cd ~/Dev/kaishi/dotfiles
+nix flake update
+sudo darwin-rebuild switch --flake .#mac
+```
+
 
