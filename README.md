@@ -108,5 +108,5 @@ cp ~/Dev/kaishi/dotfiles/.github/workflows/*.yml .github/workflows/
 
 ## 設定一覧
 - [zsh](/zsh/README.md)
-- [.claude](/.claude/README.md)
+- [claude](/.claude/README.md)
 - [Nix](/nix/README.md)
