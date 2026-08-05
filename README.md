@@ -1,12 +1,13 @@
 # dotfiles
 
 ## 概要
-macOS環境全体をNix（nix-darwin + home-manager + nix-homebrew）で宣言的に管理する個人用dotfilesリポジトリ。CLIツール・GUIアプリ・macOSのシステム設定に加え、ターミナル（zsh）のプロンプト設定と、Claude Codeのグローバル設定（フック・スキル・permissionsなど）もあわせて管理する。`.claude/`配下は`.claude/setup.sh`で`~/.claude`へシンボリックリンクされ（`darwin-rebuild switch`時にhome-manager activationからも自動実行される）、このリポジトリを編集するだけで全プロジェクトのClaude Code設定に反映される。共通のGitHub Actionsワークフロー（`.github/`）もここで管理し、他リポジトリへコピーして使う。
+macOS環境全体をNix（nix-darwin + home-manager + nix-homebrew）で宣言的に管理する個人用dotfilesリポジトリ。CLIツール・GUIアプリ・macOSのシステム設定に加え、ターミナル（zsh）のプロンプト設定、VSCode / Cursor の共通設定（settings・keybindings・拡張機能）、Claude Codeのグローバル設定（フック・スキル・permissionsなど）もあわせて管理する。`.claude/`配下は`.claude/setup.sh`で`~/.claude`へシンボリックリンクされ（`darwin-rebuild switch`時にhome-manager activationからも自動実行される）、このリポジトリを編集するだけで全プロジェクトのClaude Code設定に反映される。共通のGitHub Actionsワークフロー（`.github/`）もここで管理し、他リポジトリへコピーして使う。
 
 ## 技術スタック
 - Nix / nix-darwin / home-manager / nix-homebrew（macOS環境全体の宣言的管理。`flake.nix` + `nix/`）
 - Homebrew（GUIアプリのcaskとApp Storeアプリ。本体はnix-homebrewが導入）
 - Zsh（ターミナルプロンプト設定）
+- VSCode / Cursor（`vscode/`配下の共通設定をhome-manager経由で書き込み可能リンクし、拡張機能をactivation時に自動導入）
 - Bash（`bootstrap.sh`、`.claude/setup.sh`、`hooks/`配下のシェルスクリプト）
 - Claude Code（`settings.json` / `CLAUDE.md` / Skills / Hooksによるグローバル設定管理）
 - LINE Messaging API（`curl` + `jq`で通知連携）
@@ -25,7 +26,13 @@ dotfiles/
 │   ├── darwin.nix         # macOSシステム設定（キーリピート・Dock・アプリ固有設定等）
 │   ├── packages.nix       # CLIツール（git・gh・Node.js等。Nixで管理）
 │   ├── homebrew.nix       # GUIアプリ（Homebrew cask・App Storeアプリ）
-│   └── home.nix           # home-manager設定（zsh・.claude/のリンク処理）
+│   └── home.nix           # home-manager設定（zsh・VSCode/Cursor設定のリンクと拡張機能導入・.claude/のリンク処理）
+├── vscode/
+│   ├── README.md          # VSCode/Cursor共通設定の詳細ドキュメント
+│   ├── settings.json      # エディタ設定の実体（両エディタで共有）
+│   ├── keybindings.json   # キーバインドの実体（両エディタで共有）
+│   ├── extensions.txt     # 導入する拡張機能のIDリスト
+│   └── install-extensions.sh # 拡張機能をVSCode/Cursorへ導入（activation時に自動実行）
 ├── commands/
 │   ├── claude-code.md    # Claude Code組み込みスラッシュコマンド一覧（リファレンス）
 │   └── private.md        # このリポジトリで使えるコマンド・スキルの個人用早見表
@@ -94,6 +101,7 @@ nix flake update
 
 ### セットアップスクリプト
 - `bash .claude/setup.sh`：`.claude/`配下を`~/.claude`へシンボリックリンク
+- `bash vscode/install-extensions.sh`：`vscode/extensions.txt`の拡張機能をVSCode/Cursorへ導入（`darwin-rebuild switch`時にも自動実行される。冪等）
 
 ### GitHub Actionsワークフローのコピー
 導入したいリポジトリのルートに移動して、そのまま実行する：
@@ -110,3 +118,4 @@ cp ~/Dev/kaishi/dotfiles/.github/workflows/*.yml .github/workflows/
 - [zsh](/zsh/README.md)
 - [claude](/.claude/README.md)
 - [Nix](/nix/README.md)
+- [VSCode](/vscode/README.md)

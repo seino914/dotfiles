@@ -4,9 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## リポジトリの性質
 
-macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は5つ：
+macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は6つ：
 
 - `flake.nix` + `nix/` — **Nix（nix-darwin + home-manager + nix-homebrew）によるmacOS環境全体の宣言管理**（CLIツール・GUIアプリ・macOS設定）。`bootstrap.sh` が新Macの1コマンドセットアップを担う
+- `vscode/` — **VSCode / Cursor 共通の設定実体**（settings.json・keybindings.json・拡張機能リスト）。`home.nix` が両エディタのUserディレクトリへ書き込み可能リンクを張り、`install-extensions.sh` が activation 時に拡張機能を導入する。エディタ本体はcask管理のため `programs.vscode` モジュールは使わない
 - `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills）
 - `zsh/` — zshプロンプト表示のカスタマイズ（`zsh/.zshrc`）
 - `.github/workflows/` — **他リポジトリへコピーして使う配布用テンプレート**。このリポジトリ自身のCIではない
@@ -32,6 +33,7 @@ macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在
 - **`claude-code` は意図的にNix管理外**（packages.nixのコメント参照）。常に最新版を使うため公式ネイティブインストーラーの自動更新版を採用し、bootstrap.shが導入する
 - `homebrew.nix` は `cleanup = "none"` のため、caskをリストから削除しても既存Macからは消えない（新Macに入らなくなるだけ）。Homebrew本体はnix-homebrewが管理し、既存インストールは `autoMigrate` で取り込む
 - アプリ固有設定を宣言化するときは `defaults read <ドメイン>` で実機から採取し、`darwin.nix` の `CustomUserPreferences` に記述する（Mosの例を参照）
+- **`vscode/` 配下はflake評価時には読まれない**（`mkOutOfStoreSymlink` による絶対パス参照のため）。「git追跡ファイルしか認識しない」ルールの例外で `git add` 不要だが、新しいMacへ配るにはpushが必要（`bootstrap.sh` はGitHub上のmainをクローンする）。`home.nix` の `editorUserFiles` にある `force = true` は初回適用時に既存実体をリンクへ置き換えるために必要なので外さないこと。拡張機能は `vscode/extensions.txt` から削除しても既存環境からはアンインストールされない（`cleanup = "none"` と同方針）。詳細は `vscode/README.md`
 - **適用（`darwin-rebuild switch`）はsudoが必要なためClaude Codeからは実行できない**。設定変更後はユーザーに適用コマンドの実行を依頼する
 
 ## コマンド
@@ -54,6 +56,7 @@ nix flake update
   - リンク対象外：`setup.sh`・`README.md`・`.line-env.example`・`.DS_Store`
   - リンクが実体ファイルで上書きされた場合（claude-code Issue #40857 の既知挙動）は、実体を最新としてリポジトリへ取り込んでからリンクを張り直すセルフヒーリングを持つ
 - `source ~/.zshrc` — zsh設定の反映
+- VSCode/Cursorの設定・キーバインドは、エディタのUIから変更するだけで即リポジトリの `vscode/` に反映される（書き込み可能リンクのため適用コマンド不要）。`vscode/extensions.txt` に追記した拡張機能の導入のみ `darwin-rebuild switch` が必要
 
 ### 配布用ワークフローの導入（導入先リポジトリのルートで実行）
 ```zsh
