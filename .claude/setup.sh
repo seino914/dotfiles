@@ -14,7 +14,7 @@ CLAUDE_DIR="$HOME/.claude"
 # リンク対象から除外するファイル（リポジトリ管理用のファイル）
 is_excluded() {
   case "$1" in
-    setup.sh | README.md | .line-env.example | *.DS_Store) return 0 ;;
+    setup.sh | README.md | claude-notify.example.json | *.DS_Store) return 0 ;;
     *) return 1 ;;
   esac
 }

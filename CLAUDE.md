@@ -53,7 +53,7 @@ nix flake update
 ### 設定の反映
 - `bash .claude/setup.sh` — `.claude/` 配下を `~/.claude` へシンボリックリンク
   - 冪等だが自動実行はされない。**`.claude/` 配下にファイルを追加・削除したら再実行が必要**（スクリプト自体の修正は不要）。なお `darwin-rebuild switch` 時にはhome-manager activationからも自動実行される
-  - リンク対象外：`setup.sh`・`README.md`・`.line-env.example`・`.DS_Store`
+  - リンク対象外：`setup.sh`・`README.md`・`claude-notify.example.json`・`.DS_Store`
   - リンクが実体ファイルで上書きされた場合（claude-code Issue #40857 の既知挙動）は、実体を最新としてリポジトリへ取り込んでからリンクを張り直すセルフヒーリングを持つ
 - `source ~/.zshrc` — zsh設定の反映
 - VSCode/Cursorの設定・キーバインドは、エディタのUIから変更するだけで即リポジトリの `vscode/` に反映される（書き込み可能リンクのため適用コマンド不要）。`vscode/extensions.txt` に追記した拡張機能の導入のみ `darwin-rebuild switch` が必要
@@ -62,13 +62,6 @@ nix flake update
 ```zsh
 mkdir -p .github/workflows
 cp ~/Dev/kaishi/dotfiles/.github/workflows/*.yml .github/workflows/
-```
-
-### LINE通知の送信数確認
-```zsh
-source ~/.claude/.line-env
-curl -s https://api.line.me/v2/bot/message/quota -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN"
-curl -s https://api.line.me/v2/bot/message/quota/consumption -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN"
 ```
 
 ## アーキテクチャ：/pr フローの三層構造
@@ -85,6 +78,13 @@ git commit / git push / PR作成の制御は三層で成り立っており、**�
 - 自動承認は `PermissionRequest` フックで返す（`PreToolUse` の `permissionDecision=allow` では `permissions.ask` を上書きできないため）
 - フラグファイルは `${TMPDIR:-/tmp}/claude-pr-mode-<session_id>`。`Stop` で削除し、15秒より古い残骸は `UserPromptSubmit` で掃除する
 
-## LINE通知の仕組み
+## iPhoneプッシュ通知の仕組み（claude-notify）
 
-`.claude/hooks/notify-line.sh` が `Stop` / `Notification` フックからLINE Messaging APIの broadcast へ送信する。トークンは `~/.claude/.line-env` に手動配置する（リポジトリには `.line-env.example` のみ含める。**実トークンをコミットしない**）。実行ログは `~/.claude/hooks/notify-line.log` に追記される。`Stop` イベントでは `stop_hook_active` を見て無限ループを防いでいる。
+`.claude/hooks/notify.sh` が `Stop` / `Notification` フックから呼ばれ、**このリポジトリ内の** `claude-notify/send-push.mjs` を経由してWeb PushでiPhoneのPWAへ通知する。受信側のPWAのみ別リポジトリ `claude-notify-mobile`（Vercel配信）にある。設計上の注意：
+
+- notify.sh は自身の実体パス（`readlink -f`）から dotfiles ルートを解決して送信スクリプトを見つける。環境変数 `CLAUDE_NOTIFY_REPO` は不要になった（PCごとのパス差はリンク解決で吸収される）
+- notify.sh は**何が起きても即 exit 0**（送信スクリプト・jq・nodeの欠如、依存未インストールでも静かに終了し、Claude Codeを止めない）。送信はnohupでバックグラウンド実行
+- 送信スクリプトは `web-push` に依存する。`claude-notify/node_modules` は `.gitignore` 対象で、`nix/home.nix` の `home.activation.installClaudeNotifyDeps` が `darwin-rebuild switch` 時に `pnpm install --frozen-lockfile` を実行して用意する（失敗してもsoft failでswitchは止めない）
+- VAPID鍵・購読情報は `~/.claude/claude-notify.json` に手動配置する（リポジトリには `claude-notify.example.json` のみ含める。**記入済みファイルは秘密鍵を含むため絶対にコミットしない**）
+- 実行ログは `~/.claude/claude-notify.log` に追記される
+- 新PCでのセットアップ手順・疎通テストは `.claude/README.md`、受信側PWAの設計は claude-notify-mobile リポジトリの `docs/SETUP.md` を参照

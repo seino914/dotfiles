@@ -9,12 +9,12 @@
 | :--- | :--- |
 | `settings.json` | Claude Code の設定（フック・言語・effortLevel・permissions など） |
 | `CLAUDE.md` | プロジェクト共通の指示（常に日本語で返答・Git操作の制限） |
-| `hooks/notify-line.sh` | Stop / Notification 時に LINE へ通知するスクリプト |
+| `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は claude-notify-mobile リポジトリ） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成を自動許可するフック |
 | `skills/readme/SKILL.md` | `/readme` スキル：READMEを最新状態に更新（なければ新規作成） |
 | `skills/pr/SKILL.md` | `/pr` スキル：変更をコミット・pushしてGitHubにPRを作成 |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：ローカルブランチのうちmain・develop以外を削除して整理 |
-| `.line-env.example` | LINE アクセストークン設定のテンプレート |
+| `claude-notify.example.json` | iPhone プッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下の全ファイルを `~/.claude` へシンボリックリンクするスクリプト |
 
 ## セットアップ（反映方法）
@@ -28,7 +28,7 @@ bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
 - **ファイルを追加したら再実行するだけ**でリンクされます（スクリプトの修正は不要）。
 - `skills/` や `commands/` などのディレクトリを作れば、そのまま `~/.claude` 配下に反映され、全プロジェクトで使えます。
 - リポジトリから削除したファイルの切れたリンクは、再実行時に自動で掃除されます。
-- `setup.sh`・`README.md`・`.line-env.example` はリポジトリ管理用のためリンク対象外です。
+- `setup.sh`・`README.md`・`claude-notify.example.json` はリポジトリ管理用のためリンク対象外です。
 
 ### Claude Code が設定を書き込んだ場合の挙動
 
@@ -38,7 +38,7 @@ bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
 
 ## settings.json
 
-- `hooks.Stop` / `hooks.Notification`：`notify-line.sh` を実行して LINE 通知
+- `hooks.Stop` / `hooks.Notification`：`claude-notify-mobile` の `notify.sh` を実行して iPhone へプッシュ通知
 - `permissions.ask`：`git commit` / `git push` / `gh pr create` / `gh pr merge` は実行前に必ず確認ダイアログを表示
 - `language`：`japanese`
 - `effortLevel`：`high`
@@ -57,27 +57,14 @@ bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
   - `PermissionRequest`（Bash）：フラグがあれば `behavior: allow` を返して ask ダイアログを代替承認
   - `Stop`：ターン終了時にフラグ削除
 
-## LINE 通知
+## iPhone プッシュ通知（claude-notify）
 
-`hooks/notify-line.sh` がイベントに応じてメッセージを送信します。
+`Stop`（タスク完了）/ `Notification`（確認待ち）イベントで `hooks/notify.sh` を実行し、Web Push で iPhone の PWA に通知します。送信本体（`claude-notify/send-push.mjs`）は**この dotfiles リポジトリに同梱**されており、notify.sh は自身の実体パスから場所を解決します（`CLAUDE_NOTIFY_REPO` などの環境変数は不要）。依存（`web-push`）は `darwin-rebuild switch` 時に home-manager の activation が `pnpm install --frozen-lockfile` で自動導入します。依存が入っていない PC では何もせず静かに終了します。受信側の PWA は別リポジトリ claude-notify-mobile（Vercel 配信）にあり、仕組みは同リポジトリの `docs/DESIGN.md` / `docs/SETUP.md` を参照。
 
-| イベント | 通知内容 |
-| :--- | :--- |
-| `Stop` | `✅ タスク完了: <プロジェクト名>` |
-| `Notification` | `⏳ 確認待ち: <プロジェクト名>` |
-| その他 | `🔔 <プロジェクト名>` |
+新しい PC で使うには（`darwin-rebuild switch` 実行後）:
 
-- LINE Messaging API の `broadcast` エンドポイントへ POST します。
-- `Stop` イベントは `stop_hook_active` が `true` の場合、無限ループ防止のためスキップします。
-- 実行ログは `~/.claude/hooks/notify-line.log` に追記されます。
+1. `claude-notify.example.json` を `~/.claude/claude-notify.json` にコピーし、VAPID 鍵と購読情報を記入する（値は既存 PC の `~/.claude/claude-notify.json` からコピーすればよい。iPhone 側の再設定は不要）。**新 PC で必要な手動作業はこれだけ**（送信スクリプトも依存も dotfiles 側で揃う）
+2. 疎通テスト: `node ~/Dev/kaishi/dotfiles/claude-notify/send-push.mjs --title "テスト" --body "OK" --event Stop`
 
-## LINE通知送信数
-LINE通知で送信した数と上限が見れます。
-```zsh
-source ~/.claude/.line-env
-echo "上限:"; curl -s https://api.line.me/v2/bot/message/quota \
-  -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN"; echo
-echo "当月消費:"; curl -s https://api.line.me/v2/bot/message/quota/consumption \
-  -H "Authorization: Bearer $LINE_CHANNEL_ACCESS_TOKEN"; echo
-```
+**注意**: 記入済みの `~/.claude/claude-notify.json` は VAPID 秘密鍵を含むため、このリポジトリ（PUBLIC）には絶対にコミットしないこと。実行ログは `~/.claude/claude-notify.log` に追記されます。
 

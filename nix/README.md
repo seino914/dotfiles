@@ -42,7 +42,7 @@ sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
 
 - **App Storeへのサインイン** — `masApps`（LINE・Kindle）の導入に必要。未サインインだとその部分だけ失敗するが、サインイン後に再適用すれば入る
 - **Mos初回起動時のアクセシビリティ権限の許可** — マウスのスクロール方向反転に必要
-- **`~/.claude/.line-env` の手動配置** — `.claude/.line-env.example` を参考に。実トークンはコミット禁止
+- **`~/.claude/claude-notify.json` の手動配置**（iPhoneプッシュ通知を使う場合） — `.claude/claude-notify.example.json` を参考に記入する（既存PCの同ファイルをコピーでもよい）。VAPID秘密鍵を含むためコミット禁止。詳細は [`../.claude/README.md`](../.claude/README.md)
 - **各アプリへのサインイン** — Chrome同期・Docker・Slack等
 
 ### 既にHomebrew構築済みのMacへ初適用する場合の注意

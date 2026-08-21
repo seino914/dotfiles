@@ -1,5 +1,5 @@
 {
-  description = "peipou's macOS environment (nix-darwin + home-manager + homebrew)";
+  description = "macOS environment (nix-darwin + home-manager + homebrew)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";

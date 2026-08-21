@@ -10,9 +10,9 @@
 | path | 表示例 |
 | :--- | :--- |
 | `/` | `/$` |
-| `/Users/tonosaki` | `~$` |
-| `/Users/tonosaki/Dev` | `~/Dev $` |
-| `/Users/tonosaki/Dev/kaishi` | `~/kaishi $` |
+| `/Users/<ユーザー名>` | `~$` |
+| `/Users/<ユーザー名>/Dev` | `~/Dev $` |
+| `/Users/<ユーザー名>/Dev/kaishi` | `~/kaishi $` |
 
 ## 色
 - パス：`magenta`

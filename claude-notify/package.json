@@ -1,0 +1,13 @@
+{
+  "name": "claude-notify-sender",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Claude Code の hook から Web Push 通知を送る送信側スクリプト",
+  "scripts": {
+    "send": "node send-push.mjs"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}
