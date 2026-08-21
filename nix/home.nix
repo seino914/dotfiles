@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   username,
   dotfilesPath,
   ...
@@ -54,5 +55,19 @@ in
   # home-managerの宣言管理では再現できないため、あえて移行しない
   home.activation.linkClaudeConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     run /bin/bash ${dotfilesPath}/.claude/setup.sh
+  '';
+
+  # iPhoneプッシュ通知の送信スクリプト（claude-notify/send-push.mjs）は
+  # web-push に依存するため、node_modules を activation 時に用意する。
+  # node_modules はリポジトリ管理外（.gitignore）なので、新しいMacでも
+  # `darwin-rebuild switch` だけで送信できる状態になる。
+  # pnpm は実行に node を要するので PATH に nodejs を通す。
+  # オフライン等でインストールに失敗しても switch 全体は失敗させない
+  home.activation.installClaudeNotifyDeps = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run ${pkgs.bash}/bin/bash -c '
+      export PATH="${pkgs.nodejs_26}/bin:$PATH"
+      cd "${dotfilesPath}/claude-notify" &&
+        "${pkgs.pnpm}/bin/pnpm" install --frozen-lockfile
+    ' || echo "警告: claude-notify の依存インストールに失敗しました（iPhone通知は無効のまま。ネットワーク接続後に手動で 'cd ${dotfilesPath}/claude-notify && pnpm install' を実行してください）"
   '';
 }

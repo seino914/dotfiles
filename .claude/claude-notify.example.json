@@ -1,0 +1,19 @@
+{
+  "_comment": "claude-notify（iPhoneプッシュ通知）の設定テンプレート。~/.claude/claude-notify.json にコピーして値を埋める。秘密鍵・購読情報を含むため、記入済みファイルは絶対にリポジトリへコミットしないこと。送信スクリプトは dotfiles 内の claude-notify/send-push.mjs（受信側 PWA と鍵の発行手順は claude-notify-mobile リポジトリの docs/SETUP.md を参照）",
+  "vapid": {
+    "subject": "mailto:you@example.com",
+    "publicKey": "YOUR_VAPID_PUBLIC_KEY",
+    "privateKey": "YOUR_VAPID_PRIVATE_KEY"
+  },
+  "subscription": {
+    "endpoint": "https://web.push.apple.com/xxxxxxxx",
+    "keys": {
+      "p256dh": "YOUR_SUBSCRIPTION_P256DH_KEY",
+      "auth": "YOUR_SUBSCRIPTION_AUTH_SECRET"
+    }
+  },
+  "filters": {
+    "events": ["Stop", "Notification"],
+    "debounceSeconds": 30
+  }
+}

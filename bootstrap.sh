@@ -72,4 +72,4 @@ fi
 echo ""
 echo "セットアップ完了！"
 echo "手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可、"
-echo "~/.claude/.line-env の配置など）は nix/README.md を参照してください。"
+echo "~/.claude/claude-notify.json の配置など）は nix/README.md を参照してください。"

@@ -1,1 +1,4 @@
 result
+claude-notify/node_modules/
+# 記入済みの通知設定はVAPID秘密鍵を含むため誤コミット防止（実体は ~/.claude/claude-notify.json）
+.claude/claude-notify.json
