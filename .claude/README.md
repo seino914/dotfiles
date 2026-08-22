@@ -9,7 +9,7 @@
 | :--- | :--- |
 | `settings.json` | Claude Code の設定（フック・言語・effortLevel・permissions など） |
 | `CLAUDE.md` | プロジェクト共通の指示（常に日本語で返答・Git操作の制限） |
-| `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は claude-notify-mobile リポジトリ） |
+| `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は dotfiles 同梱の `claude-notify/send-push.mjs`、受信側PWAは claude-notify-mobile リポジトリ） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成を自動許可するフック |
 | `skills/readme/SKILL.md` | `/readme` スキル：READMEを最新状態に更新（なければ新規作成） |
 | `skills/pr/SKILL.md` | `/pr` スキル：変更をコミット・pushしてGitHubにPRを作成 |

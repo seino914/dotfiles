@@ -10,7 +10,7 @@ VSCodeとCursorの設定の**実体**を置くディレクトリ。CursorはVSCo
 |---|---|
 | [`settings.json`](settings.json) | エディタ設定の実体。両エディタから同一内容が参照される |
 | [`keybindings.json`](keybindings.json) | キーバインドの実体。両エディタから同一内容が参照される |
-| [`extensions.txt`](extensions.txt) | 導入する拡張機能のIDリスト（1行1ID、`#` で始まる行はコメント） |
+| [`extensions.txt`](extensions.txt) | 導入する拡張機能のIDリスト（1行1ID、`#` で始まる行はコメント）。`mkhl.direnv`はエディタのターミナルやツールにも[nix/home.nix](../nix/home.nix)で導入したdirenvの環境変数を反映させる拡張 |
 | [`install-extensions.sh`](install-extensions.sh) | `extensions.txt` の拡張機能をVSCode/Cursorへインストールする冪等スクリプト。`darwin-rebuild switch` 時にhome-manager activationから自動実行される |
 
 ## 仕組みと設計理由

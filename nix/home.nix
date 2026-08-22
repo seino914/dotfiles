@@ -57,6 +57,17 @@ in
     run /bin/bash ${dotfilesPath}/.claude/setup.sh
   '';
 
+  # direnv: .envrc のあるプロジェクトディレクトリに cd した瞬間、
+  # そのプロジェクトの flake.nix devShell を自動で有効化/無効化する。
+  # nix-direnv は devShell の評価結果をキャッシュして即座に切り替えるための拡張
+  # （direnvrc の配線も home-manager が自動生成する）。
+  # zsh へのフックは ~/.zshrc が mkOutOfStoreSymlink 管理（home-manager 非管理）のため
+  # enableZshIntegration では注入されず、zsh/.zshrc に直接記述している
+  programs.direnv = {
+    enable = true;
+    nix-direnv.enable = true;
+  };
+
   # iPhoneプッシュ通知の送信スクリプト（claude-notify/send-push.mjs）は
   # web-push に依存するため、node_modules を activation 時に用意する。
   # node_modules はリポジトリ管理外（.gitignore）なので、新しいMacでも

@@ -47,3 +47,8 @@ PROMPT='$(prompt_path)$(
     echo " '"$PR_DOLLAR"'"
   fi
 ) '
+
+# direnv: .envrc のあるディレクトリで devShell を自動ON/OFF（nix/home.nix で導入）
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
+fi

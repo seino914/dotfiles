@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## リポジトリの性質
 
-macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は6つ：
+macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は7つ：
 
 - `flake.nix` + `nix/` — **Nix（nix-darwin + home-manager + nix-homebrew）によるmacOS環境全体の宣言管理**（CLIツール・GUIアプリ・macOS設定）。`bootstrap.sh` が新Macの1コマンドセットアップを担う
 - `vscode/` — **VSCode / Cursor 共通の設定実体**（settings.json・keybindings.json・拡張機能リスト）。`home.nix` が両エディタのUserディレクトリへ書き込み可能リンクを張り、`install-extensions.sh` が activation 時に拡張機能を導入する。エディタ本体はcask管理のため `programs.vscode` モジュールは使わない
 - `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills）
-- `zsh/` — zshプロンプト表示のカスタマイズ（`zsh/.zshrc`）
-- `.github/workflows/` — **他リポジトリへコピーして使う配布用テンプレート**。このリポジトリ自身のCIではない
+- `zsh/` — zsh設定（`zsh/.zshrc`）。プロンプト表示のカスタマイズと direnv フックの2責務を持つ
+- `claude-notify/` — iPhoneへのWeb Push通知の**送信側スクリプト**（`send-push.mjs`）。詳細は後述の「iPhoneプッシュ通知の仕組み」参照
+- `.github/workflows/` — **他リポジトリへコピーして使う配布用テンプレート**。ただしリポジトリ内に置かれている以上、`delete-merged-branch.yml`（PRマージ時のブランチ自動削除）は**このリポジトリ自身のPRにも発火する**
 - `commands/` — 個人用の早見表メモ（Claude Code組み込みコマンド一覧・よく使う操作の控え）。名前は似ているが `.claude/commands/`（カスタムスラッシュコマンド）ではなく、setup.shのリンク対象でもない単なるドキュメント
 
 ## 最重要：`.claude/` の編集は全プロジェクトに即反映される
@@ -30,6 +31,7 @@ macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在
 - **`darwin.nix` の `nix.enable = false` は変更禁止**。Nix本体はDeterminate Systemsインストーラーが管理しており、nix-darwin側の管理を有効にすると二重管理で衝突する
 - **flakeはgit追跡ファイルしか認識しない**。`.nix` ファイルを追加したら `git add` しなければ適用時に「ファイルが存在しない」扱いになる（コミットは不要、ステージングで足りる）
 - **`home.nix` の `.claude/` 処理をhome-manager標準管理に「移行」しないこと**。`~/.zshrc` は `mkOutOfStoreSymlink`（書き込み可能リンク）だが、`.claude/` はあえて既存 `setup.sh` をactivationから実行する方式。setup.shのセルフヒーリング（リンクが実体化したとき実体をリポジトリへ取り込む）はhome-managerでは再現できない
+- **direnvのzshフックは `zsh/.zshrc` に直書きが正**。direnv本体は `home.nix` の `programs.direnv`（nix-direnv併用）で導入するが、`~/.zshrc` は `mkOutOfStoreSymlink` でhome-manager非管理のため `enableZshIntegration` ではフックを注入できない。VSCode/Cursor側への反映は `vscode/extensions.txt` の `mkhl.direnv` 拡張が担う
 - **`claude-code` は意図的にNix管理外**（packages.nixのコメント参照）。常に最新版を使うため公式ネイティブインストーラーの自動更新版を採用し、bootstrap.shが導入する
 - `homebrew.nix` は `cleanup = "none"` のため、caskをリストから削除しても既存Macからは消えない（新Macに入らなくなるだけ）。Homebrew本体はnix-homebrewが管理し、既存インストールは `autoMigrate` で取り込む
 - アプリ固有設定を宣言化するときは `defaults read <ドメイン>` で実機から採取し、`darwin.nix` の `CustomUserPreferences` に記述する（Mosの例を参照）

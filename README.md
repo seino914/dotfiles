@@ -8,7 +8,8 @@ macOS環境全体をNix（nix-darwin + home-manager + nix-homebrew）で宣言�
 - Homebrew（GUIアプリのcaskとApp Storeアプリ。本体はnix-homebrewが導入）
 - Zsh（ターミナルプロンプト設定）
 - VSCode / Cursor（`vscode/`配下の共通設定をhome-manager経由で書き込み可能リンクし、拡張機能をactivation時に自動導入）
-- Bash（`bootstrap.sh`、`.claude/setup.sh`、`hooks/`配下のシェルスクリプト）
+- direnv / nix-direnv（`nix/home.nix`のhome-manager設定で導入。`.envrc`のあるプロジェクトディレクトリでflakeのdevShellを自動ON/OFF）
+- Bash（`bootstrap.sh`、`.claude/setup.sh`、`.claude/hooks/`配下のシェルスクリプト）
 - Claude Code（`settings.json` / `CLAUDE.md` / Skills / Hooksによるグローバル設定管理）
 - Web Push通知（dotfiles内蔵の送信スクリプト`claude-notify/send-push.mjs`が、Stop/Notification時にiPhoneへプッシュ通知。受信側PWAは別リポジトリ`claude-notify-mobile`をVercelで配信。Node.js + `web-push` + `jq`）
 - GitHub Actions（`.github/workflows/`配下で共通ワークフローを管理し、他リポジトリへ配布）
@@ -20,13 +21,14 @@ dotfiles/
 ├── README.md
 ├── CLAUDE.md              # リポジトリのアーキテクチャ・運用ルール（Claude Code向け）
 ├── flake.nix              # Nix環境のエントリポイント（nix-darwin + home-manager + nix-homebrew）
+├── flake.lock             # パッケージバージョンの固定（`nix flake update`後は必ずコミット）
 ├── bootstrap.sh           # 新しいMacの1コマンドセットアップ
 ├── nix/
 │   ├── README.md          # Nix運用の詳細ドキュメント
 │   ├── darwin.nix         # macOSシステム設定（キーリピート・Dock・アプリ固有設定等）
 │   ├── packages.nix       # CLIツール（git・gh・Node.js等。Nixで管理）
 │   ├── homebrew.nix       # GUIアプリ（Homebrew cask・App Storeアプリ）
-│   └── home.nix           # home-manager設定（zsh・VSCode/Cursor設定のリンクと拡張機能導入・.claude/のリンク処理・claude-notifyの依存導入）
+│   └── home.nix           # home-manager設定（zsh・VSCode/Cursor設定のリンクと拡張機能導入・direnv導入・.claude/のリンク処理・claude-notifyの依存導入）
 ├── vscode/
 │   ├── README.md          # VSCode/Cursor共通設定の詳細ドキュメント
 │   ├── settings.json      # エディタ設定の実体（両エディタで共有）
