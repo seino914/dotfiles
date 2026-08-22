@@ -18,6 +18,15 @@
 - **プロジェクトローカルの依存**（`npm install`・`pnpm add` などlockファイルで管理されるもの）は通常どおり使ってよい
 - グローバル（dotfilesの `nix/packages.nix` 等）に追加すべきと判断した場合も、勝手に追加せずユーザーに提案する
 
+# 新規開発環境のセットアップ（Nix + direnv）
+
+新しいプロジェクトの開発環境を用意するときは、PCのグローバル環境を汚さないことを最優先とし、必要なツール・ランタイムはすべてNixのdevShellで宣言管理する。
+
+- **`flake.nix` の devShell（`pkgs.mkShell`）に必要なツールを宣言する**。グローバルへのインストール（`brew install`・`npm install -g` 等）で済ませない
+- **direnvを必ず併用する**。プロジェクトルートに `use flake` と書いた `.envrc` を作成し、`direnv allow` を実行する。これにより `cd` でディレクトリに入ると自動でdevShellがON、出るとOFFになり、手動で `nix develop` を打つ運用はしない（direnv本体とnix-direnvはdotfilesのhome-managerで導入済み）
+- `flake.nix` と `.envrc` はgit追跡に入れる（flakeはgit追跡ファイルしか認識しないため、作成したら最低限 `git add` する）
+- `flake.lock` もコミット対象とし、環境の再現性を担保する
+
 # モデル運用ポリシー（オーケストレーター / 実装の分離）
 
 トークン節約のため、メインセッション（Fable 5）は**設計・監査・レビューに専念**し、実装作業は適切なモデルのサブエージェントに切り出して実行すること。

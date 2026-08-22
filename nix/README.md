@@ -12,7 +12,7 @@ Nix（nix-darwin + home-manager + nix-homebrew）でmacOS環境全体を宣言�
 | [`darwin.nix`](darwin.nix) | macOSのシステム設定。`system.defaults`（キーリピート・マウス感度・Dock・トラックパッド）と、`CustomUserPreferences` によるアプリ固有設定（Mosのスクロール反転等） |
 | [`packages.nix`](packages.nix) | CLIツール群（git・gh・Node.js・pnpm・Docker CLI等）。バージョンは `flake.lock` で固定される |
 | [`homebrew.nix`](homebrew.nix) | GUIアプリの宣言リスト。Homebrew cask（Chrome・VSCode・Mos等）と App Storeアプリ（`masApps`: LINE・Kindle）。Homebrew本体はnix-homebrewが導入するため手動インストール不要 |
-| [`home.nix`](home.nix) | home-manager設定。`~/.zshrc` と VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行） |
+| [`home.nix`](home.nix) | home-manager設定。`~/.zshrc` と VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、direnv + nix-direnvの導入（`.envrc` のあるディレクトリでdevShellを自動ON/OFF）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行） |
 
 ## 新しいMacのセットアップ手順
 
@@ -80,6 +80,7 @@ sudo darwin-rebuild switch --flake .#mac
 
 ## 注意
 
+- direnvは`home.nix`の`programs.direnv`（nix-direnv併用）で導入している。`.envrc`のあるプロジェクトディレクトリに`cd`すると、そのプロジェクトの`flake.nix`のdevShellが自動で有効化/無効化される。ただし`~/.zshrc`は`mkOutOfStoreSymlink`管理（home-manager非管理）のため`enableZshIntegration`ではzshフックが注入されず、フックは[`../zsh/.zshrc`](../zsh/.zshrc)に直接記述している
 - flakeは**gitに追跡されているファイルしか認識しない**。新しい `.nix` ファイルを追加したら `git add` してから適用すること
 - リポジトリの配置は `~/Dev/kaishi/dotfiles` 固定（`flake.nix` の `dotfilesPath` がユーザー名から自動で導かれる）。別の場所に置きたい場合は `dotfilesPath` と `bootstrap.sh` の両方を変更する
 - 構成名は機種に依存しない固定名 `mac`。適用コマンドでは常に `#mac` を明示する
