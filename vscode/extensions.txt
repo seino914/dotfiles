@@ -6,6 +6,7 @@ anthropic.claude-code
 astro-build.astro-vscode
 bierner.markdown-checkbox
 github.vscode-github-actions
+jnoortheen.nix-ide
 mkhl.direnv
 ms-azuretools.vscode-containers
 ms-ceintl.vscode-language-pack-ja
