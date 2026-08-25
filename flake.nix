@@ -30,8 +30,8 @@
       username = "peipou";
       # このリポジトリの実体パス。
       # .claude/ や zsh/ への「書き込み可能なリンク」を張るために使う。
-      # クローン先は bootstrap.sh が ~/Dev/kaishi/dotfiles に統一する
-      dotfilesPath = "/Users/${username}/Dev/kaishi/dotfiles";
+      # クローン先は bootstrap.sh が ~/Dev/seino914/dotfiles に統一する
+      dotfilesPath = "/Users/${username}/Dev/seino914/dotfiles";
     in
     {
       # マシン（ホスト名）に依存しない固定の構成名。

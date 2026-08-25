@@ -20,7 +20,7 @@
 ## セットアップ（反映方法）
 
 ```zsh
-bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
+bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 ```
 
 `.claude/` 配下の全ファイルが、同じディレクトリ構成のまま `~/.claude` へシンボリックリンクされます。以後はこのリポジトリを編集するだけで全プロジェクトに即反映されます（コピー作業は不要）。
@@ -64,7 +64,7 @@ bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
 新しい PC で使うには（`darwin-rebuild switch` 実行後）:
 
 1. `claude-notify.example.json` を `~/.claude/claude-notify.json` にコピーし、VAPID 鍵と購読情報を記入する（値は既存 PC の `~/.claude/claude-notify.json` からコピーすればよい。iPhone 側の再設定は不要）。**新 PC で必要な手動作業はこれだけ**（送信スクリプトも依存も dotfiles 側で揃う）
-2. 疎通テスト: `node ~/Dev/kaishi/dotfiles/claude-notify/send-push.mjs --title "テスト" --body "OK" --event Stop`
+2. 疎通テスト: `node ~/Dev/seino914/dotfiles/claude-notify/send-push.mjs --title "テスト" --body "OK" --event Stop`
 
 **注意**: 記入済みの `~/.claude/claude-notify.json` は VAPID 秘密鍵を含むため、このリポジトリ（PUBLIC）には絶対にコミットしないこと。実行ログは `~/.claude/claude-notify.log` に追記されます。
 

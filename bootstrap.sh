@@ -6,7 +6,7 @@
 # やること:
 #   1. Xcode Command Line Tools の確認（なければインストールを起動して終了）
 #   2. Nix の確認（なければ Determinate Systems インストーラーで導入）
-#   3. ~/Dev/kaishi を作成してリポジトリをクローン（既にあればそのまま使う）
+#   3. ~/Dev/seino914 を作成してリポジトリをクローン（既にあればそのまま使う）
 #   4. flake.nix の username をこのMacの実際のユーザー名に書き換え
 #   5. nix-darwin を初回適用
 #   6. Claude Code CLI を導入（公式インストーラー・自動更新版。あえてNix管理外）
@@ -16,7 +16,7 @@
 set -eu
 
 REPO_URL="https://github.com/seino914/dotfiles.git"
-BASE_DIR="$HOME/Dev/kaishi"
+BASE_DIR="$HOME/Dev/seino914"
 DOTFILES_DIR="$BASE_DIR/dotfiles"
 CURRENT_USER="$(id -un)"
 
