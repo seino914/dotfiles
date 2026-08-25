@@ -7,7 +7,7 @@ Nix（nix-darwin + home-manager + nix-homebrew）でmacOS環境全体を宣言�
 
 | ファイル | 役割 |
 |---|---|
-| [`../bootstrap.sh`](../bootstrap.sh) | 新しいMacの1コマンドセットアップ。`~/Dev/kaishi` の作成・クローン・ユーザー名の自動書き換え・初回適用までを行う |
+| [`../bootstrap.sh`](../bootstrap.sh) | 新しいMacの1コマンドセットアップ。`~/Dev/seino914` の作成・クローン・ユーザー名の自動書き換え・初回適用までを行う |
 | [`../flake.nix`](../flake.nix) | エントリポイント。nix-darwin / home-manager / nix-homebrew を統合し、機種に依存しない構成名 `mac` を定義。ユーザー名（`username`）はbootstrap.shがそのMacに合わせて自動で書き換える |
 | [`darwin.nix`](darwin.nix) | macOSのシステム設定。`system.defaults`（キーリピート・マウス感度・Dock・トラックパッド）と、`CustomUserPreferences` によるアプリ固有設定（Mosのスクロール反転等） |
 | [`packages.nix`](packages.nix) | CLIツール群（git・gh・Node.js・pnpm・Docker CLI等）。バージョンは `flake.lock` で固定される |
@@ -16,7 +16,7 @@ Nix（nix-darwin + home-manager + nix-homebrew）でmacOS環境全体を宣言�
 
 ## 新しいMacのセットアップ手順
 
-ユーザー名・`~/Dev/kaishi` の有無にかかわらず、これ1コマンドで完了する：
+ユーザー名・`~/Dev/seino914` の有無にかかわらず、これ1コマンドで完了する：
 
 ```zsh
 curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh | bash
@@ -26,7 +26,7 @@ curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh
 
 1. Xcode Command Line Tools の確認（なければインストールを起動）
 2. Nixのインストール（Determinate Systemsインストーラー。flakesが最初から有効）
-3. `~/Dev/kaishi` を作成してリポジトリをクローン
+3. `~/Dev/seino914` を作成してリポジトリをクローン
 4. `flake.nix` の `username` をそのMacの実際のユーザー名に書き換え
 5. nix-darwinの初回適用
 6. Claude Code CLIの導入（常に最新版を使うため、Nix管理ではなく公式インストーラーの自動更新版を採用）
@@ -35,7 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh
 
 ```zsh
 # 2回目以降の適用（darwin-rebuild コマンドが使えるようになっている）
-sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
+sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 ```
 
 ### 手動で必要な操作（自動化できないもの）
@@ -71,7 +71,7 @@ sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
 ### パッケージを更新する
 
 ```zsh
-cd ~/Dev/kaishi/dotfiles
+cd ~/Dev/seino914/dotfiles
 nix flake update
 sudo darwin-rebuild switch --flake .#mac
 ```
@@ -82,6 +82,6 @@ sudo darwin-rebuild switch --flake .#mac
 
 - direnvは`home.nix`の`programs.direnv`（nix-direnv併用）で導入している。`.envrc`のあるプロジェクトディレクトリに`cd`すると、そのプロジェクトの`flake.nix`のdevShellが自動で有効化/無効化される。ただし`~/.zshrc`は`mkOutOfStoreSymlink`管理（home-manager非管理）のため`enableZshIntegration`ではzshフックが注入されず、フックは[`../zsh/.zshrc`](../zsh/.zshrc)に直接記述している
 - flakeは**gitに追跡されているファイルしか認識しない**。新しい `.nix` ファイルを追加したら `git add` してから適用すること
-- リポジトリの配置は `~/Dev/kaishi/dotfiles` 固定（`flake.nix` の `dotfilesPath` がユーザー名から自動で導かれる）。別の場所に置きたい場合は `dotfilesPath` と `bootstrap.sh` の両方を変更する
+- リポジトリの配置は `~/Dev/seino914/dotfiles` 固定（`flake.nix` の `dotfilesPath` がユーザー名から自動で導かれる）。別の場所に置きたい場合は `dotfilesPath` と `bootstrap.sh` の両方を変更する
 - 構成名は機種に依存しない固定名 `mac`。適用コマンドでは常に `#mac` を明示する
 - Nix本体はDeterminate Systemsインストーラーで管理しているため、`darwin.nix` の `nix.enable = false` は変更しないこと（二重管理で衝突する）

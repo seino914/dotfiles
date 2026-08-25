@@ -10,7 +10,7 @@
 
 # パッケージインストールの制限（Nix運用）
 
-グローバル環境は `~/Dev/kaishi/dotfiles` のNix設定（nix-darwin + home-manager）で宣言管理している。開発中に環境を勝手に変更しないこと。
+グローバル環境は `~/Dev/seino914/dotfiles` のNix設定（nix-darwin + home-manager）で宣言管理している。開発中に環境を勝手に変更しないこと。
 
 - **グローバルへのインストールを勝手に行わない**：`brew install`・`npm install -g`・`pip install --user` など、プロジェクトの外に影響する恒久的なインストールは、ユーザーが明示的に指示した場合のみ実行する
 - **ツールやランタイムが必要になったら、プロジェクトローカルのNix設定で解決する**：そのリポジトリに `flake.nix` の devShell（`pkgs.mkShell`）を作成・編集して必要なツールを宣言し、`nix develop` 経由で使う。既にdevShellがあるプロジェクトではそこに追記する

@@ -68,17 +68,17 @@ dotfiles/
 ```zsh
 curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh | bash
 ```
-`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/kaishi/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用、Claude Code CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
+`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用、Claude Code CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
 
 ### Nix環境の適用・更新（2回目以降）
 ```zsh
-sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
+sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 ```
 設定ファイル（`flake.nix` / `nix/*.nix`）を変更した後に実行する。sudoが必要なため、Claude Codeからは実行できずユーザーが手動で行う。
 
 ### Claude Code設定の反映
 ```zsh
-bash ~/Dev/kaishi/dotfiles/.claude/setup.sh
+bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 ```
 `.claude/`配下の全ファイルが`~/.claude`へシンボリックリンクされる（`darwin-rebuild switch`時にはhome-manager activationからも自動実行される）。
 
@@ -91,7 +91,7 @@ source ~/.zshrc
 ### Nix環境
 ```zsh
 # 適用（設定ファイル変更後）
-sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
+sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 
 # 初回（darwin-rebuild未導入時）
 sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#mac
@@ -113,7 +113,7 @@ nix flake update
 導入したいリポジトリのルートに移動して、そのまま実行する：
 ```zsh
 mkdir -p .github/workflows
-cp ~/Dev/kaishi/dotfiles/.github/workflows/*.yml .github/workflows/
+cp ~/Dev/seino914/dotfiles/.github/workflows/*.yml .github/workflows/
 ```
 
 ### コマンドリファレンス（[commands](/commands/private.md)）

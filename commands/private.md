@@ -13,7 +13,7 @@
 
 ```zsh
 mkdir -p .github/workflows
-cp ~/Dev/kaishi/dotfiles/.github/workflows/*.yml .github/workflows/
+cp ~/Dev/seino914/dotfiles/.github/workflows/*.yml .github/workflows/
 ```
 
 ## zsh
@@ -33,13 +33,13 @@ curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh
 ### 2回目以降
 
 ```zsh
-sudo darwin-rebuild switch --flake ~/Dev/kaishi/dotfiles#mac
+sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 ```
 
 ### パッケージの更新
 
 ```zsh
-cd ~/Dev/kaishi/dotfiles
+cd ~/Dev/seino914/dotfiles
 nix flake update
 sudo darwin-rebuild switch --flake .#mac
 ```

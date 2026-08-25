@@ -1,5 +1,4 @@
 {
-  "model": "claude-fable-5[1m]",
   "permissions": {
     "ask": [
       "Bash(git commit:*)",
@@ -8,6 +7,7 @@
       "Bash(gh pr merge:*)"
     ]
   },
+  "model": "claude-fable-5[1m]",
   "hooks": {
     "UserPromptExpansion": [
       {
@@ -70,5 +70,6 @@
   "language": "japanese",
   "effortLevel": "high",
   "tui": "fullscreen",
-  "skipWorkflowUsageWarning": true
+  "skipWorkflowUsageWarning": true,
+  "agentPushNotifEnabled": true
 }

@@ -12,7 +12,7 @@
 | `/` | `/$` |
 | `/Users/<ユーザー名>` | `~$` |
 | `/Users/<ユーザー名>/Dev` | `~/Dev $` |
-| `/Users/<ユーザー名>/Dev/kaishi` | `~/kaishi $` |
+| `/Users/<ユーザー名>/Dev/seino914` | `~/seino914 $` |
 
 ## 色
 - パス：`magenta`
