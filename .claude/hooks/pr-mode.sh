@@ -13,7 +13,9 @@
 # - UserPromptSubmit: 前ターンの残骸フラグを掃除（立てた直後のものは残す）
 # - PermissionRequest: フラグがあれば対象コマンドを behavior=allow で自動承認
 #   （PreToolUse の permissionDecision=allow では permissions.ask を
-#     上書きできない。ask ダイアログの代替はこのイベントで行う）
+#     上書きできない。ask ダイアログの代替はこのイベントで行う）。
+#   フラグが無ければ対象コマンドを behavior=deny で機構的にブロックする
+#   （/pr 以外でのコミット・push・PR作成を確認ダイアログ任せにしない）
 # - Stop: ターン終了時にフラグ削除
 
 input=$(cat)
@@ -44,24 +46,61 @@ case "$event" in
     fi
     ;;
   PermissionRequest)
-    if [ -f "$flag" ]; then
-      cmd=$(echo "$input" | jq -r '.tool_input.command // ""')
+    cmd=$(echo "$input" | jq -r '.tool_input.command // ""')
 
+    if [ -f "$flag" ]; then
       # 自動許可はコマンド文字列が対象コマンドで始まる単一コマンドに限る。
       # 以下は自動許可せず通常の確認ダイアログに落とす（拒否はしない）：
       # - シェル演算子（&& || ; | &）を含む複合コマンド
       #   （フックの decision はリクエスト全体に適用されるため、対象外の
-      #     サブコマンドまで巻き込んで許可してしまうのを防ぐ。
-      #     引用符内の演算子も巻き添えになるが、その場合は確認が出るだけ）
+      #     サブコマンドまで巻き込んで許可してしまうのを防ぐ）
       # - force push（--force / --force-with-lease / -f）。SKILL.md の
       #   「force push はしない」を指示任せにせずこの層でも担保する
+      #
+      # 判定の前に、引用符（'…' / "…"）内と HEREDOC 本文を除去する。
+      # コミットメッセージや PR 本文に演算子や --force という文字列が
+      # リテラルとして含まれるだけで自動承認が外れるのを防ぐため
+      # （実際に /pr の PR 本文中の `&&` で誤検知した実績がある）。
+      # HEREDOC の終端が見つからない等で除去に失敗した場合は演算子扱いに
+      # してダイアログへ落とす（安全側）。
       # なお git commit / gh pr create の HEREDOC（複数行）は許可対象に
-      # 含める必要があるため、改行は複合コマンドの判定に使わない
-      case "$cmd" in
+      # 含める必要があるため、改行そのものは複合コマンドの判定に使わない
+      stripped=$(printf '%s\n' "$cmd" | awk '
+        hd != "" {
+          line = $0
+          sub(/^\t+/, "", line)   # <<- 形式は終端タグの前のタブを許す
+          if (line == hd) hd = ""
+          next
+        }
+        {
+          if (match($0, /<<-?[ \t]*['\''"]?[A-Za-z_][A-Za-z0-9_]*/)) {
+            tag = substr($0, RSTART, RLENGTH)
+            sub(/<<-?[ \t]*['\''"]?/, "", tag)
+            hd = tag
+          }
+          print
+        }
+        END { if (hd != "") print ";" }   # 終端が見つからないHEREDOCは安全側へ
+      ' | sed -E "s/'[^']*'//g" | sed -E 's/"(\\.|[^"\\])*"//g')
+
+      case "$stripped" in
         *'&&'* | *'||'* | *';'* | *'|'* | *'&'*) ;;
         *--force* | *' -f'*) ;;
-        "git commit"* | "git push"* | "gh pr create"*)
-          echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}'
+        *)
+          case "$cmd" in
+            "git commit"* | "git push"* | "gh pr create"*)
+              echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}'
+              ;;
+          esac
+          ;;
+      esac
+    else
+      # /pr 実行中でなければ、コミット・push・PR作成を含むコマンドは
+      # 確認ダイアログすら出さずに拒否する（CLAUDE.md の指示・permissions.ask
+      # に続く最終防衛層）。gh pr merge は対象外（従来どおり ask で確認）
+      case "$cmd" in
+        *"git commit"* | *"git push"* | *"gh pr create"*)
+          echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"コミット・push・PR作成はユーザーが /pr を実行しているターンでのみ許可されます。ユーザーに /pr の実行を依頼してください。"}}}'
           ;;
       esac
     fi

@@ -55,10 +55,10 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `skills/pr/SKILL.md` の `disable-model-invocation: true`：`/pr` はユーザー起動限定で、Claude がスキルを自動起動すること自体を機構的に禁止
 - `CLAUDE.md`：`/pr` の指示があるまで `git commit` / `git push` / `gh pr create` を実行しないよう指示（Claude が試みること自体を抑止）
 - `settings.json` の `permissions.ask`：万一実行しようとしても必ず確認ダイアログが出る強制レイヤー
-- `hooks/pr-mode.sh`：`/pr` を送信したターンの間だけフラグを立て、対象コマンドを自動許可（確認ダイアログをスキップ）
+- `hooks/pr-mode.sh`：`/pr` を送信したターンの間だけフラグを立て、対象コマンドを自動許可（確認ダイアログをスキップ）。フラグが無ければ同コマンドを `behavior: deny` で拒否する最終防衛層
   - `UserPromptExpansion`：スラッシュコマンド展開時、コマンド名が `pr` ならフラグ作成、別コマンドなら削除
   - `UserPromptSubmit`：中断などで残った古いフラグを掃除
-  - `PermissionRequest`（Bash）：フラグがあれば `behavior: allow` を返して ask ダイアログを代替承認。自動承認は「`git commit` / `git push` / `gh pr create` で始まる単一コマンド」に限定し、`gh pr merge`・複合コマンド（`&&` `;` `|` 等）・force push（`--force` / `-f`）は自動承認せず通常の確認に落とす
+  - `PermissionRequest`（Bash）：フラグがあれば `behavior: allow` を返して ask ダイアログを代替承認。自動承認は「`git commit` / `git push` / `gh pr create` で始まる単一コマンド」に限定し、`gh pr merge`・複合コマンド（`&&` `;` `|` 等）・force push（`--force` / `-f`）は自動承認せず通常の確認に落とす。複合コマンド・force pushの判定は引用符内とHEREDOC本文を除去した上で行う（PR本文中の演算子リテラル等での誤検知防止）。フラグが無ければ `git commit` / `git push` / `gh pr create` を含むコマンドを `behavior: deny` で拒否（`gh pr merge` は対象外で常に ask）
   - `Stop`：ターン終了時にフラグ削除
 
 ## iPhone プッシュ通知（claude-notify）

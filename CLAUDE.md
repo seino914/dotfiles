@@ -73,7 +73,7 @@ git commit / git push / PR作成の制御は四層で成り立っており、**�
 1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にし、Claudeによるスキルの自動起動を機構的に禁止する
 2. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
 3. `.claude/settings.json` の `permissions.ask` — `git commit` / `git push` / `gh pr create` / `gh pr merge` を常に確認対象にする
-4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ `git commit` / `git push` / `gh pr create` の確認を自動承認するフラグ管理。**`gh pr merge` は自動承認の対象外**（スキルの手順に merge が無いため）。また、シェル演算子（`&&` `;` `|` 等）を含む複合コマンドと force push（`--force` / `-f`）は自動承認せず通常の確認ダイアログに落とす
+4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ `git commit` / `git push` / `gh pr create` の確認を自動承認し、**`/pr` 実行中でなければ同コマンドを deny で機構的に拒否する**フラグ管理。**`gh pr merge` は自動承認の対象外**（スキルの手順に merge が無いため。deny の対象でもなく常に ask で確認）。シェル演算子（`&&` `;` `|` 等）を含む複合コマンドと force push（`--force` / `-f`）は自動承認せず通常の確認ダイアログに落とすが、この判定は引用符内・HEREDOC本文を除去してから行う（コミットメッセージやPR本文中の演算子リテラルで誤検知しないため）
 
 `pr-mode.sh` には実装上の制約がコメントで明記されている。変更時は以下に注意：
 
