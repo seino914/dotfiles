@@ -59,7 +59,8 @@ dotfiles/
     ├── skills/
     │   ├── pr/SKILL.md            # /pr スキル
     │   ├── readme/SKILL.md        # /readme スキル
-    │   └── clean-branches/SKILL.md # /clean-branches スキル
+    │   ├── clean-branches/SKILL.md # /clean-branches スキル
+    │   └── nix-setup/SKILL.md     # /nix-setup スキル
     └── README.md
 ```
 
@@ -101,9 +102,10 @@ nix flake update
 ```
 
 ### Claude Codeスキル
-- `/pr`：現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する
+- `/pr`：現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（ユーザー起動限定）
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちmain・develop以外を削除して整理する
+- `/nix-setup`：新規プロジェクトの開発環境をNixのdevShell + direnvでセットアップする
 
 ### セットアップスクリプト
 - `bash .claude/setup.sh`：`.claude/`配下を`~/.claude`へシンボリックリンク

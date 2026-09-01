@@ -1,6 +1,7 @@
 ---
 name: clean-branches
 description: 現在のリポジトリのローカルブランチのうち main・develop 以外を削除して整理する。「ブランチを整理して」「不要なブランチを消して」などの依頼や /clean-branches 実行時に使用。
+model: sonnet
 ---
 
 # ブランチ整理

@@ -66,13 +66,14 @@ mkdir -p .github/workflows
 cp ~/Dev/seino914/dotfiles/.github/workflows/*.yml .github/workflows/
 ```
 
-## アーキテクチャ：/pr フローの三層構造
+## アーキテクチャ：/pr フローの四層構造
 
-git commit / git push / PR作成の制御は三層で成り立っており、**一層だけ変更すると整合が壊れる**：
+git commit / git push / PR作成の制御は四層で成り立っており、**一層だけ変更すると整合が壊れる**：
 
-1. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
-2. `.claude/settings.json` の `permissions.ask` — `git commit` / `git push` / `gh pr create` / `gh pr merge` を常に確認対象にする
-3. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ上記の確認を自動承認するフラグ管理
+1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にし、Claudeによるスキルの自動起動を機構的に禁止する
+2. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
+3. `.claude/settings.json` の `permissions.ask` — `git commit` / `git push` / `gh pr create` / `gh pr merge` を常に確認対象にする
+4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ `git commit` / `git push` / `gh pr create` の確認を自動承認するフラグ管理。**`gh pr merge` は自動承認の対象外**（スキルの手順に merge が無いため）。また、シェル演算子（`&&` `;` `|` 等）を含む複合コマンドと force push（`--force` / `-f`）は自動承認せず通常の確認ダイアログに落とす
 
 `pr-mode.sh` には実装上の制約がコメントで明記されている。変更時は以下に注意：
 
@@ -82,11 +83,11 @@ git commit / git push / PR作成の制御は三層で成り立っており、**�
 
 ## iPhoneプッシュ通知の仕組み（claude-notify）
 
-`.claude/hooks/notify.sh` が `Stop` / `Notification` フックから呼ばれ、**このリポジトリ内の** `claude-notify/send-push.mjs` を経由してWeb PushでiPhoneのPWAへ通知する。受信側のPWAのみ別リポジトリ `claude-notify-mobile`（Vercel配信）にある。設計上の注意：
+`.claude/hooks/notify.sh` が `Stop` / `Notification` フックから呼ばれ、**このリポジトリ内の** `claude-notify/send-push.mjs` を経由してWeb PushでiPhoneのPWAへ通知する。`Notification` は matcher により `permission_prompt`（許可待ち）のみ対象（`idle_prompt` 等での重複通知を避けるため）。受信側のPWAのみ別リポジトリ `claude-notify-mobile`（Vercel配信）にある。設計上の注意：
 
 - notify.sh は自身の実体パス（`readlink -f`）から dotfiles ルートを解決して送信スクリプトを見つける。環境変数 `CLAUDE_NOTIFY_REPO` は不要になった（PCごとのパス差はリンク解決で吸収される）
 - notify.sh は**何が起きても即 exit 0**（送信スクリプト・jq・nodeの欠如、依存未インストールでも静かに終了し、Claude Codeを止めない）。送信はnohupでバックグラウンド実行
 - 送信スクリプトは `web-push` に依存する。`claude-notify/node_modules` は `.gitignore` 対象で、`nix/home.nix` の `home.activation.installClaudeNotifyDeps` が `darwin-rebuild switch` 時に `pnpm install --frozen-lockfile` を実行して用意する（失敗してもsoft failでswitchは止めない）
 - VAPID鍵・購読情報は `~/.claude/claude-notify.json` に手動配置する（リポジトリには `claude-notify.example.json` のみ含める。**記入済みファイルは秘密鍵を含むため絶対にコミットしない**）
-- 実行ログは `~/.claude/claude-notify.log` に追記される
+- 実行ログは `~/.claude/claude-notify.log` に追記される（1MBを超えると次回送信時に切り詰められる）。なお `~/.claude/claude-notify.json` はVAPID秘密鍵を含むため、`settings.json` の `permissions.deny`（`Read` ルール）でClaude自身の読み取りも禁止している
 - 新PCでのセットアップ手順・疎通テストは `.claude/README.md`、受信側PWAの設計は claude-notify-mobile リポジトリの `docs/SETUP.md` を参照
