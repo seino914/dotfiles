@@ -1,6 +1,7 @@
 ---
 name: readme
 description: プロジェクトのREADME.mdを現在のコードベースの状態に合わせて更新する。READMEが存在しない場合は新規作成する。「READMEを更新して」「READMEを作って」などの依頼や /readme 実行時に使用。
+model: sonnet
 ---
 
 # README更新・作成

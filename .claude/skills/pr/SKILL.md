@@ -1,6 +1,7 @@
 ---
 name: pr
 description: 現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する。ユーザーが /pr と明示的に指示したときのみ使用する。git commit / git push / gh pr create はこのスキルの実行中に限り許可される。
+disable-model-invocation: true
 ---
 
 # PR作成

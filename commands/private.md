@@ -7,6 +7,7 @@
 /pr
 /readme
 /clean-branches
+/nix-setup
 ```
 
 ## Github Workflow

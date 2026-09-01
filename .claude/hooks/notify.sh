@@ -57,6 +57,11 @@ fi
 
 mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
 
+# ログの無限成長を防ぐ（1MB超なら切り詰めてから追記する）
+if [ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+  : > "$LOG_FILE"
+fi
+
 nohup "$NODE_BIN" "$SENDER" \
   --title "[$project] $event" \
   --body "$message" \

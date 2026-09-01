@@ -5,9 +5,12 @@
       "Bash(git push:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr merge:*)"
+    ],
+    "deny": [
+      "Read(~/.claude/claude-notify.json)"
     ]
   },
-  "model": "claude-fable-5[1m]",
+  "model": "claude-fable-5",
   "hooks": {
     "UserPromptExpansion": [
       {
@@ -57,7 +60,7 @@
     ],
     "Notification": [
       {
-        "matcher": "",
+        "matcher": "permission_prompt",
         "hooks": [
           {
             "type": "command",
@@ -70,6 +73,5 @@
   "language": "japanese",
   "effortLevel": "high",
   "tui": "fullscreen",
-  "skipWorkflowUsageWarning": true,
   "agentPushNotifEnabled": true
 }
