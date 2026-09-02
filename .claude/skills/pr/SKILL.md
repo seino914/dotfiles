@@ -12,6 +12,7 @@ disable-model-invocation: true
 
 - このスキルはユーザーの `/pr` 指示によってのみ実行する。それ以外の場面で git commit / git push / gh pr create を実行してはならない
 - `/pr` 実行中は `hooks/pr-mode.sh` により git commit / git push / gh pr create が自動許可される（それ以外の場面では `permissions.ask` により必ず確認が入る）
+- **自動許可は単一コマンドに限る**。`git commit` / `git push` / `gh pr create` は必ず **1つずつ独立した Bash 呼び出しで実行**し、`&&` `;` `|` などで他のコマンド（`git checkout -b` や `git add` を含む）と繋がない。複合コマンドにするとフックが自動許可せず確認ダイアログに落ちる
 
 ## 手順
 
