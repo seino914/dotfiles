@@ -42,7 +42,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `hooks.Stop` / `hooks.Notification`：`hooks/notify.sh` を実行して iPhone へプッシュ通知（`Notification` は matcher により `permission_prompt`＝許可待ちのみ対象。`idle_prompt` 等との重複通知を避けるため）
 - `permissions.ask`：`git commit` / `git push` / `gh pr create` / `gh pr merge` は実行前に必ず確認ダイアログを表示
 - `permissions.deny`：`Read(~/.claude/claude-notify.json)` — VAPID秘密鍵を含むファイルの読み取りを禁止（同ルールで Edit / Write もブロックされる）
-- `model`：`claude-fable-5`
+- `model`：`claude-fable-5-1`
 - `language`：`japanese`
 - `effortLevel`：`high`
 - `tui`：`fullscreen`
