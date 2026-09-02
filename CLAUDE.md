@@ -1,93 +1,72 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## リポジトリの性質
 
-macOS用の個人dotfilesリポジトリ。ビルド・lint・テストは存在しない。管理対象は7つ：
+macOS用の個人dotfiles。ビルド・lint・テストは無い（変更後の検証手段は後述）。管理対象：
 
-- `flake.nix` + `nix/` — **Nix（nix-darwin + home-manager + nix-homebrew）によるmacOS環境全体の宣言管理**（CLIツール・GUIアプリ・macOS設定）。`bootstrap.sh` が新Macの1コマンドセットアップを担う
-- `vscode/` — **VSCode / Cursor 共通の設定実体**（settings.json・keybindings.json・拡張機能リスト）。`home.nix` が両エディタのUserディレクトリへ書き込み可能リンクを張り、`install-extensions.sh` が activation 時に拡張機能を導入する。エディタ本体はcask管理のため `programs.vscode` モジュールは使わない
+- `flake.nix` + `nix/` — nix-darwin + home-manager + nix-homebrew によるmacOS環境全体の宣言管理。`bootstrap.sh` が新Macの1コマンドセットアップ
+- `vscode/` — VSCode / Cursor 共通設定の実体。書き込み可能リンクで両エディタへ配る（詳細 `vscode/README.md`）
 - `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills）
-- `zsh/` — zsh設定（`zsh/.zshrc`）。プロンプト表示のカスタマイズと direnv フックの2責務を持つ
-- `claude-notify/` — iPhoneへのWeb Push通知の**送信側スクリプト**（`send-push.mjs`）。詳細は後述の「iPhoneプッシュ通知の仕組み」参照
-- `.github/workflows/` — **他リポジトリへコピーして使う配布用テンプレート**。ただしリポジトリ内に置かれている以上、`delete-merged-branch.yml`（PRマージ時のブランチ自動削除）は**このリポジトリ自身のPRにも発火する**
-- `commands/` — 個人用の早見表メモ（Claude Code組み込みコマンド一覧・よく使う操作の控え）。名前は似ているが `.claude/commands/`（カスタムスラッシュコマンド）ではなく、setup.shのリンク対象でもない単なるドキュメント
+- `zsh/.zshrc` — プロンプト表示と direnv フック
+- `claude-notify/` — iPhoneへのWeb Push通知の送信側スクリプト（受信側PWAは別リポジトリ `claude-notify-mobile`）
+- `.github/workflows/` — 他リポジトリへコピーして使う配布用テンプレート。ただし `delete-merged-branch.yml` は**このリポジトリ自身のPRにも発火する**
+- `commands/` — 個人用の早見表メモ。`.claude/commands/`（カスタムスラッシュコマンド）ではない
 
 ## 最重要：`.claude/` の編集は全プロジェクトに即反映される
 
-`~/.claude/CLAUDE.md` や `~/.claude/settings.json` は、このリポジトリの `.claude/` 配下へのシンボリックリンク。したがって：
+`~/.claude/*` はこのリポジトリの `.claude/` へのシンボリックリンク。編集すると**コミット前でも全プロジェクトのClaude Code挙動が変わる**。逆に `/model` や `/config` での変更はこのリポジトリの `settings.json` に未コミット差分として現れる。`.claude/CLAUDE.md` はグローバル指示の実体であり、本ファイルとは役割が違う。
 
-- `.claude/` 配下を編集すると、コミット前でも**その場で全プロジェクトのClaude Code挙動が変わる**。試験目的の書き換えでも影響範囲を意識すること
-- 逆に、セッション内の `/model` や `/config` による設定変更はリンクを辿ってこのリポジトリの `settings.json` に書き込まれ、未コミット差分として現れる
-- `.claude/CLAUDE.md` はこのリポジトリ専用の指示ではなく**グローバル指示の実体**。ルートの本ファイルと役割を混同しない
+## やってはいけないこと（理由つき）
 
-## アーキテクチャ：Nixによる環境管理
+- `darwin.nix` の `nix.enable = false` を変える — Nix本体はDeterminate Systemsインストーラーが管理しており、二重管理で衝突する
+- `home.nix` の `.claude/` 処理をhome-manager標準管理へ移行する — `setup.sh` のセルフヒーリング（リンクが実体化したとき実体をリポジトリへ取り込む。claude-code Issue #40857 対策）はhome-managerで再現できない
+- `home.nix` の `editorUserFiles` から `force = true` を外す — 初回適用時に既存実体をリンクへ置き換えるのに必要
+- `flake.nix` の `username` ハードコードを動的取得にする — flakeは純粋評価で環境変数を読めない。`bootstrap.sh` がクローン時に `sed` で書き換える設計
+- direnvのzshフックを `programs.direnv.enableZshIntegration` に置き換える — `~/.zshrc` は `mkOutOfStoreSymlink` でhome-manager非管理のため注入されない。`zsh/.zshrc` 直書きが正
+- `claude-code` をNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
+- `sudo darwin-rebuild switch` を実行しようとする — sudoが必要で実行不可。検証を通したうえでユーザーに依頼する
+- 記入済みの `~/.claude/claude-notify.json` を読む・コミットする — VAPID秘密鍵を含む（`permissions.deny` でも読み取り禁止済み）
+- /pr フロー四層のうち一層だけを変更する — 整合が壊れる（後述）
 
-`flake.nix` がエントリポイントで、`nix/` 配下の4モジュール（darwin.nix / packages.nix / homebrew.nix / home.nix）を統合する。設計上の不変条件が多いので、編集時は以下を守ること：
+## 編集時に知っておくこと
 
-- **構成名は機種非依存の `mac` 固定**。適用コマンドは常に `--flake <リポジトリ>#mac` と明示する（ホスト名によるフォールバックは意図的に使っていない）
-- **`username` はハードコードが正**。flakeは純粋評価で環境変数を読めないため、`bootstrap.sh` がクローン時に `sed` でそのMacの実ユーザー名へ書き換える設計。`dotfilesPath` は username から導出され、リポジトリ配置は `~/Dev/seino914/dotfiles` 固定
-- **`darwin.nix` の `nix.enable = false` は変更禁止**。Nix本体はDeterminate Systemsインストーラーが管理しており、nix-darwin側の管理を有効にすると二重管理で衝突する
-- **flakeはgit追跡ファイルしか認識しない**。`.nix` ファイルを追加したら `git add` しなければ適用時に「ファイルが存在しない」扱いになる（コミットは不要、ステージングで足りる）
-- **`home.nix` の `.claude/` 処理をhome-manager標準管理に「移行」しないこと**。`~/.zshrc` は `mkOutOfStoreSymlink`（書き込み可能リンク）だが、`.claude/` はあえて既存 `setup.sh` をactivationから実行する方式。setup.shのセルフヒーリング（リンクが実体化したとき実体をリポジトリへ取り込む）はhome-managerでは再現できない
-- **direnvのzshフックは `zsh/.zshrc` に直書きが正**。direnv本体は `home.nix` の `programs.direnv`（nix-direnv併用）で導入するが、`~/.zshrc` は `mkOutOfStoreSymlink` でhome-manager非管理のため `enableZshIntegration` ではフックを注入できない。VSCode/Cursor側への反映は `vscode/extensions.txt` の `mkhl.direnv` 拡張が担う
-- **`claude-code` は意図的にNix管理外**（packages.nixのコメント参照）。常に最新版を使うため公式ネイティブインストーラーの自動更新版を採用し、bootstrap.shが導入する
-- `homebrew.nix` は `cleanup = "none"` のため、caskをリストから削除しても既存Macからは消えない（新Macに入らなくなるだけ）。Homebrew本体はnix-homebrewが管理し、既存インストールは `autoMigrate` で取り込む
-- アプリ固有設定を宣言化するときは `defaults read <ドメイン>` で実機から採取し、`darwin.nix` の `CustomUserPreferences` に記述する（Mosの例を参照）
-- **`vscode/` 配下はflake評価時には読まれない**（`mkOutOfStoreSymlink` による絶対パス参照のため）。「git追跡ファイルしか認識しない」ルールの例外で `git add` 不要だが、新しいMacへ配るにはpushが必要（`bootstrap.sh` はGitHub上のmainをクローンする）。`home.nix` の `editorUserFiles` にある `force = true` は初回適用時に既存実体をリンクへ置き換えるために必要なので外さないこと。拡張機能は `vscode/extensions.txt` から削除しても既存環境からはアンインストールされない（`cleanup = "none"` と同方針）。詳細は `vscode/README.md`
-- **適用（`darwin-rebuild switch`）はsudoが必要なためClaude Codeからは実行できない**。設定変更後はユーザーに適用コマンドの実行を依頼する
+- 構成名は機種非依存の `mac` 固定。適用は常に `--flake <リポジトリ>#mac` と明示する（ホスト名フォールバックは意図的に不使用）
+- **flakeはgit追跡ファイルしか認識しない**。`.nix` を追加したら `git add` する（ステージングで足りる）。例外は `vscode/` 配下（`mkOutOfStoreSymlink` の絶対パス参照なので評価時に読まれない）。ただし新Macへ配るにはpushが必要
+- `homebrew.nix` は `cleanup = "none"`。caskを削除しても既存Macからは消えない（`vscode/extensions.txt` の拡張機能も同方針）
+- アプリ固有設定の宣言化は `defaults read <ドメイン>` で実機から採取し、`darwin.nix` の `CustomUserPreferences` へ書く（Mosの例を参照）
+- `.claude/` 配下にファイルを追加・削除したら `bash .claude/setup.sh` を再実行する（冪等。`darwin-rebuild switch` 時にも自動実行）。VSCode/Cursor設定はUIから変更すれば即リポジトリに反映され、拡張機能の追加導入のみ `switch` が要る
+- 適用・更新・配布のコマンドは `README.md` の「コマンド」参照
 
-## コマンド
+## 変更後の検証（Claude Codeが自分で実行する。sudo不要）
 
-### Nix環境の適用・更新（ユーザーのターミナルで実行）
+ユーザーに適用を依頼する前に、触ったファイルに応じて必ず通す。落ちたら自分で直す：
+
 ```zsh
-# 適用（設定ファイル変更後）
-sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
-
-# 初回（darwin-rebuild未導入時）は bash bootstrap.sh（冪等）か
-sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#mac
-
-# パッケージのバージョン更新（実行後、flake.lock を必ずコミット）
-nix flake update
+# flake.nix / nix/ を変更したとき（評価エラー・未 git add を検出。初回は数十秒。options.json の warning は上流由来で無視してよい）
+nix eval --raw .#darwinConfigurations.mac.system.drvPath
+# .claude/settings.json を変更したとき
+jq empty .claude/settings.json
+# シェルスクリプト（.claude/hooks/*.sh・setup.sh・bootstrap.sh）を変更したとき
+bash -n <スクリプト>
 ```
 
-### 設定の反映
-- `bash .claude/setup.sh` — `.claude/` 配下を `~/.claude` へシンボリックリンク
-  - 冪等だが自動実行はされない。**`.claude/` 配下にファイルを追加・削除したら再実行が必要**（スクリプト自体の修正は不要）。なお `darwin-rebuild switch` 時にはhome-manager activationからも自動実行される
-  - リンク対象外：`setup.sh`・`README.md`・`claude-notify.example.json`・`.DS_Store`
-  - リンクが実体ファイルで上書きされた場合（claude-code Issue #40857 の既知挙動）は、実体を最新としてリポジトリへ取り込んでからリンクを張り直すセルフヒーリングを持つ
-- `source ~/.zshrc` — zsh設定の反映
-- VSCode/Cursorの設定・キーバインドは、エディタのUIから変更するだけで即リポジトリの `vscode/` に反映される（書き込み可能リンクのため適用コマンド不要）。`vscode/extensions.txt` に追記した拡張機能の導入のみ `darwin-rebuild switch` が必要
+`nix eval` で分かるのは評価エラーまで。activation時の失敗は実際の `switch` でしか分からないので、その旨を添えて依頼する。
 
-### 配布用ワークフローの導入（導入先リポジトリのルートで実行）
-```zsh
-mkdir -p .github/workflows
-cp ~/Dev/seino914/dotfiles/.github/workflows/*.yml .github/workflows/
-```
+## /pr フローの四層構造
 
-## アーキテクチャ：/pr フローの四層構造
+git commit / push / PR作成の制御は四層で成り立ち、**一層だけ変更すると整合が壊れる**：
 
-git commit / git push / PR作成の制御は四層で成り立っており、**一層だけ変更すると整合が壊れる**：
-
-1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にし、Claudeによるスキルの自動起動を機構的に禁止する
+1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にする
 2. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
-3. `.claude/settings.json` の `permissions.ask` — `git commit` / `git push` / `gh pr create` / `gh pr merge` を常に確認対象にする
-4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ `git commit` / `git push` / `gh pr create` の確認を自動承認し、**`/pr` 実行中でなければ同コマンドを deny で機構的に拒否する**フラグ管理。**`gh pr merge` は自動承認の対象外**（スキルの手順に merge が無いため。deny の対象でもなく常に ask で確認）。シェル演算子（`&&` `;` `|` 等）を含む複合コマンドと force push（`--force` / `-f`）は自動承認せず通常の確認ダイアログに落とすが、この判定は引用符内・HEREDOC本文を除去してから行う（コミットメッセージやPR本文中の演算子リテラルで誤検知しないため）
+3. `.claude/settings.json` の `permissions.ask` — 対象コマンドを常に確認対象にする
+4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ確認を自動承認し、それ以外は deny で拒否する（`gh pr merge` は常に ask）
 
-`pr-mode.sh` には実装上の制約がコメントで明記されている。変更時は以下に注意：
+フックの実装上の制約（判定に使えるイベント、複合コマンド・force pushの扱い、引用符/HEREDOC除去、フラグファイルの寿命）は `pr-mode.sh` のコメントに書いてあるので、変更前に読むこと。
 
-- `/pr` かどうかの判定は `UserPromptExpansion` の `command_name` でのみ可能（`UserPromptSubmit` のpromptには展開後の本文しか入らず判定できない）
-- 自動承認は `PermissionRequest` フックで返す（`PreToolUse` の `permissionDecision=allow` では `permissions.ask` を上書きできないため）
-- フラグファイルは `${TMPDIR:-/tmp}/claude-pr-mode-<session_id>`。`Stop` で削除し、15秒より古い残骸は `UserPromptSubmit` で掃除する
+## iPhoneプッシュ通知（claude-notify）
 
-## iPhoneプッシュ通知の仕組み（claude-notify）
+`.claude/hooks/notify.sh` が `Stop` / `Notification`（`permission_prompt` のみ）から `claude-notify/send-push.mjs` を呼ぶ。設計上の要点：
 
-`.claude/hooks/notify.sh` が `Stop` / `Notification` フックから呼ばれ、**このリポジトリ内の** `claude-notify/send-push.mjs` を経由してWeb PushでiPhoneのPWAへ通知する。`Notification` は matcher により `permission_prompt`（許可待ち）のみ対象（`idle_prompt` 等での重複通知を避けるため）。受信側のPWAのみ別リポジトリ `claude-notify-mobile`（Vercel配信）にある。設計上の注意：
-
-- notify.sh は自身の実体パス（`readlink -f`）から dotfiles ルートを解決して送信スクリプトを見つける。環境変数 `CLAUDE_NOTIFY_REPO` は不要になった（PCごとのパス差はリンク解決で吸収される）
-- notify.sh は**何が起きても即 exit 0**（送信スクリプト・jq・nodeの欠如、依存未インストールでも静かに終了し、Claude Codeを止めない）。送信はnohupでバックグラウンド実行
-- 送信スクリプトは `web-push` に依存する。`claude-notify/node_modules` は `.gitignore` 対象で、`nix/home.nix` の `home.activation.installClaudeNotifyDeps` が `darwin-rebuild switch` 時に `pnpm install --frozen-lockfile` を実行して用意する（失敗してもsoft failでswitchは止めない）
-- VAPID鍵・購読情報は `~/.claude/claude-notify.json` に手動配置する（リポジトリには `claude-notify.example.json` のみ含める。**記入済みファイルは秘密鍵を含むため絶対にコミットしない**）
-- 実行ログは `~/.claude/claude-notify.log` に追記される（1MBを超えると次回送信時に切り詰められる）。なお `~/.claude/claude-notify.json` はVAPID秘密鍵を含むため、`settings.json` の `permissions.deny`（`Read` ルール）でClaude自身の読み取りも禁止している
-- 新PCでのセットアップ手順・疎通テストは `.claude/README.md`、受信側PWAの設計は claude-notify-mobile リポジトリの `docs/SETUP.md` を参照
+- notify.sh は自身の実体パスから dotfiles ルートを解決し、**何が起きても即 exit 0**（Claude Codeを止めない）
+- `claude-notify/node_modules` は `home.nix` の activation が `switch` 時に `pnpm install --frozen-lockfile` で用意する（soft fail）
+- 鍵・購読情報は `~/.claude/claude-notify.json` に手動配置する（リポジトリには example のみ）。セットアップ・疎通テストは `.claude/README.md`
