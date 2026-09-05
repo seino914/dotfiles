@@ -61,12 +61,13 @@ ask()  { [ -n "$pending_ask" ] || pending_ask=${1//$'\001'/ }; return 0; }
 # ---- 許可ルート（.claude/dev-roots。1 行 1 パス、~/ 始まり、# はコメント）----
 ALLOWED_ROOTS=""; ROOTS_DISP=""
 if [ -f "$DEV_ROOTS" ]; then
+  # 読み方（# 以降を落とす・前後の空白を除く・末尾の / を落とす・~/ 始まりの行だけ採る）は
+  # nix/home.nix の devDirs・tests/test-guard-destructive.sh の DR テストと揃えてある
   while IFS= read -r line; do
-    line=${line%%#*}; line=${line%"${line##*[![:space:]]}"}
-    [ -n "$line" ] || continue
-    ROOTS_DISP="$ROOTS_DISP${ROOTS_DISP:+・}${line%/}"
-    case "$line" in '~/'*) line="$HOME/${line#\~/}" ;; '~') line="$HOME" ;; esac
-    ALLOWED_ROOTS="$ALLOWED_ROOTS${ALLOWED_ROOTS:+$'\n'}${line%/}"
+    line=${line%%#*}; line=${line#"${line%%[![:space:]]*}"}; line=${line%"${line##*[![:space:]]}"}; line=${line%/}
+    case "$line" in '~/'?*) ;; *) continue ;; esac
+    ROOTS_DISP="$ROOTS_DISP${ROOTS_DISP:+・}${line}"
+    ALLOWED_ROOTS="$ALLOWED_ROOTS${ALLOWED_ROOTS:+$'\n'}$HOME/${line#\~/}"
   done < "$DEV_ROOTS"
 fi
 [ -n "$ROOTS_DISP" ] || ROOTS_DISP="（.claude/dev-roots が読めないため許可ルートなし）"

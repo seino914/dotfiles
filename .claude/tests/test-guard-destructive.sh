@@ -6,7 +6,7 @@ HOOK="$HOOKS_DIR/guard-destructive.sh"
 # cwd の既定は許可ルート内のプロジェクト。第4引数で cwd を差し替えられる
 IN="$HOME/Dev/seino914/dotfiles"
 ERRF="$T/claude-guard-test-stderr.$$"
-trap 'rm -f "$ERRF"' EXIT
+trap 'rm -f "$ERRF"; rm -rf "$T/claude-guard-test-hooks.$$"' EXIT
 g() { report "$1" "$2" "$(decision_of "$(run_hook "$HOOK" PreToolUse test-guard "$3" "" "" "${4:-$IN}")")" "$3"; }
 # 環境変数を差し替えてフックを起動する: label expected cmd env の引数…
 genv() {
@@ -354,12 +354,25 @@ echo "#   .claude/dev-roots の各ルート: 配下の削除は確認なし、�
 ROOTS_FILE="$(dirname "$(readlink -f "$HOOK" 2>/dev/null || printf '%s' "$HOOK")")/../dev-roots"
 n=0
 while IFS= read -r root; do
-  case "$root" in '~/'*) ;; *) continue ;; esac
+  # 読み方は guard / home.nix と同じ（# 以降を落とす・前後の空白と末尾の / を除く・~/ 始まりだけ採る）
+  root=${root%%#*}; root=${root#"${root%%[![:space:]]*}"}; root=${root%"${root##*[![:space:]]}"}; root=${root%/}
+  case "$root" in '~/'?*) ;; *) continue ;; esac
   n=$((n + 1)); abs="$HOME/${root#\~/}"
   g "DR$n-inside" none "rm -rf $abs/proj/build"
   g "DR$n-self" deny "rm -rf $abs"
 done < "$ROOTS_FILE"
 [ "$n" -ge 1 ] && r=ok || r=empty; report DR00-roots-present ok "$r" "$ROOTS_FILE"
+
+echo "#   dev-roots の文法（行内コメント・前後の空白・末尾の /・~/ 以外の行は無視）を、作業コピーの dev-roots で検査する"
+TMPH="$T/claude-guard-test-hooks.$$"
+mkdir -p "$TMPH/hooks/lib" && cp "$HOOK" "$TMPH/hooks/" && cp "$HOOKS_DIR/lib/strip-shell.awk" "$TMPH/hooks/lib/"
+printf '# 見出しコメント\n  ~/Dev/hobby/   # 行内コメント\n/Volumes/abs\n~\n\n' > "$TMPH/dev-roots"
+gc() { report "$1" "$2" "$(decision_of "$(run_hook "$TMPH/hooks/guard-destructive.sh" PreToolUse test-guard "$3" "" "" "$HOME/Dev/hobby/app")")" "$3"; }
+gc DC1-inline-comment none "rm -rf $HOME/Dev/hobby/app/build"
+gc DC2-unlisted-root  deny "rm -rf $HOME/Dev/kaishi/app/build"
+gc DC3-abs-line-ignored deny 'rm -rf /Volumes/abs/x'
+gc DC4-bare-tilde-ignored deny "rm -rf $HOME/Documents/x"
+rm -rf "$TMPH"
 
 echo "#   ask / deny の理由文は「何をするコマンドか」で始まる（docs/harness-plan の原則 4。説明を変えたらここも変える）"
 gr() { # label 期待する先頭文字列 cmd [cwd]

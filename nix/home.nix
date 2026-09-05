@@ -36,8 +36,12 @@ let
   # guard-destructive.sh の削除許可ルートと同じファイルを読む）。新しいMacでも同じ配置で作業を
   # 始められるようにする（中身の各リポジトリは対象外）。flake は git 追跡ファイルしか読めないので、
   # dev-roots を変更したら git add すること
-  devDirs = map (p: "${config.home.homeDirectory}/${lib.removePrefix "~/" p}")
-    (lib.filter (l: lib.hasPrefix "~/" l) (lib.splitString "\n" (builtins.readFile ../.claude/dev-roots)));
+  # 読み方（# 以降を落とす・前後の空白を除く・末尾の / を落とす・~/ 始まりの行だけ採る）は
+  # guard-destructive.sh とテスト（DR / DC）と揃えてある
+  devDirs = map (m: "${config.home.homeDirectory}/${lib.removeSuffix "/" (lib.removePrefix "~/" (lib.head m))}")
+    (lib.filter (m: m != null)
+      (map (l: builtins.match "[[:space:]]*(~/[^#]*[^#[:space:]])[[:space:]]*(#.*)?" l)
+        (lib.splitString "\n" (builtins.readFile ../.claude/dev-roots))));
 in
 {
   home.username = username;
