@@ -14,7 +14,7 @@ Nix（nix-darwin + home-manager + nix-homebrew）でmacOS環境全体を宣言�
 | [`darwin.nix`](darwin.nix) | macOSのシステム設定。`system.defaults`（キーリピート・マウス感度・Dock・トラックパッド）と、`CustomUserPreferences` によるアプリ固有設定（Mosのスクロール反転等） |
 | [`packages.nix`](packages.nix) | CLIツール群（git・gh・Node.js・pnpm・Docker CLI等）。バージョンは `flake.lock` で固定される |
 | [`homebrew.nix`](homebrew.nix) | GUIアプリの宣言リスト。Homebrew cask（Chrome・VSCode・Mos等）と App Storeアプリ（`masApps`: LINE・Kindle）。Homebrew本体はnix-homebrewが導入するため手動インストール不要 |
-| [`home.nix`](home.nix) | home-manager設定。VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、direnv + nix-direnvの導入（`.envrc` のあるディレクトリでdevShellを自動ON/OFF）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行）、作業ディレクトリの作成（`devDirs` は [`../.claude/dev-roots`](../.claude/dev-roots) を `builtins.readFile` + `lib.splitString` で読んで導出する。現在は `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`） |
+| [`home.nix`](home.nix) | home-manager設定。VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、direnv + nix-direnvの導入（`.envrc` のあるディレクトリでdevShellを自動ON/OFF）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行）、claude-notify の依存導入（`../claude-notify` で `pnpm install --frozen-lockfile`。失敗しても switch は止めない）、作業ディレクトリの作成（`devDirs` は [`../.claude/dev-roots`](../.claude/dev-roots) を `builtins.readFile` + `builtins.match` で読んで導出する。読み方は guard-destructive.sh・テストと同じで、`#` 以降・前後の空白・末尾の `/` を無視し `~/` 始まりの行だけ採る。現在は `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`） |
 
 ## 新しいMacのセットアップ手順
 

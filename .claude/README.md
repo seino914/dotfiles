@@ -136,7 +136,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 bash .claude/tests/run.sh
 ```
 
-settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、および3フック（pr-mode / guard-destructive / validate-claude-config）のテーブル駆動テスト**計 517 件**（guard 332 / pr-mode 169 / validate 16。各テストの summary 行がちょうど1行あることも確認する）を数秒で実行する。guard のテストには、許可ルート内の通常の削除が確認なしで通ることを固定する不変条件セクション（IV01〜IV13）、`dev-roots` の各ルートを検査する DR1〜DR3、ask / deny の理由文が「何をするコマンドか」で始まることを検査する X01〜X19 が含まれる。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。`hooks/pr-mode.sh`・`hooks/guard-destructive.sh`・`hooks/validate-claude-config.sh` を変更したときは必ず実行して通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
+settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、および3フック（pr-mode / guard-destructive / validate-claude-config）のテーブル駆動テスト**計 530 件**（guard 345 / pr-mode 169 / validate 16。各テストの summary 行がちょうど1行あることも確認する）を数秒で実行する。guard のテストには、許可ルート内の通常の削除が確認なしで通ることを固定する不変条件セクション（IV01〜IV13）、`dev-roots` の各ルートを検査する DR1〜DR3、`dev-roots` の文法（行内コメント・空白・`~/` 以外の行）を作業コピーで検査する DC1〜DC4、ask / deny の理由文が「何をするコマンドか」で始まることを検査する X01〜X19 が含まれる。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。`hooks/pr-mode.sh`・`hooks/guard-destructive.sh`・`hooks/validate-claude-config.sh` を変更したときは必ず実行して通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
 
 ## iPhoneプッシュ通知（claude-notify）
 

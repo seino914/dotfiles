@@ -40,7 +40,7 @@ dotfiles/
 │   └── private.md         # このリポジトリで使えるコマンド・スキルの個人用早見表
 ├── .github/
 │   └── workflows/
-│       └── delete-merged-branch.yml # PRマージ後にheadブランチを自動削除
+│       └── delete-merged-branch.yml # PRマージ後にheadブランチを自動削除（他リポジトリへ配布用だが、このリポジトリ自身のPRにも発火する）
 ├── zsh/
 │   ├── .zshrc             # プロンプト表示のカスタマイズ（このPCでは未適用。zsh/README.md 参照）
 │   └── README.md
@@ -66,7 +66,7 @@ dotfiles/
     │   ├── clean-branches/SKILL.md   # /clean-branches スキル
     │   └── nix-setup/SKILL.md        # /nix-setup スキル
     ├── tests/             # フックのテーブル駆動テスト（run.shで一括実行。~/.claude へは配布しない）
-    └── README.md
+    └── README.md          # Claude Code設定の詳細ドキュメント（フックの契約・/prフロー・通知の設定）
 ```
 
 ## セットアップ
@@ -115,9 +115,9 @@ nix flake update
 - `bash vscode/install-extensions.sh`：`vscode/extensions.txt`の拡張機能をVSCode/Cursorへ導入（`darwin-rebuild switch`時にも自動実行される。冪等）
 
 ### 検証（sudo不要）
-- `bash .claude/tests/run.sh`：`.claude/`の構文チェックとフック（pr-mode・guard-destructive・validate-claude-config）のテーブル駆動テスト計517件を数秒で実行
-- `.claude/dev-roots`（削除・作業ディレクトリの許可ルート）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
+- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter）とフック（pr-mode・guard-destructive・validate-claude-config）のテーブル駆動テスト計530件を数秒で実行。`.claude/hooks/`を変更したら必ず通す
 - `nix eval --raw .#darwinConfigurations.mac.system.drvPath`：`flake.nix` / `nix/`の評価エラーと`git add`漏れを検出（`switch`の前に流す。options.jsonのwarningは上流由来で無視してよい）
+- `.claude/dev-roots`（削除・作業ディレクトリの許可ルート。1行1パス・`~/`始まり・`#`から行末はコメント）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
 
 ### GitHub Actionsワークフローのコピー
 導入したいリポジトリのルートに移動して、そのまま実行する：

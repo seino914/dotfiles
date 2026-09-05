@@ -40,8 +40,8 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - アプリ固有設定の宣言化は `defaults read <ドメイン>` で実機から採取し、`darwin.nix` の `CustomUserPreferences` へ書く（Mosの例を参照）
 - `.claude/` 配下にファイルを追加・削除したら `bash .claude/setup.sh` を再実行する（冪等。`darwin-rebuild switch` 時にも自動実行）。VSCode/Cursor設定はUIから変更すれば即リポジトリに反映され、拡張機能の追加導入のみ `switch` が要る
 - `setup.sh` はgitが管理するファイル（追跡済み＋未追跡かつ`.gitignore`対象外）だけを配布する。`.claude/tests/` はリンク対象外（`~/.claude` には配られない）
-- **削除の許可ルートの定義は `.claude/dev-roots` だけ**（1行1パス、`~/` 始まり、`#` はコメント。現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）。読む側は `guard-destructive.sh`（`ALLOWED_ROOTS` と理由文の表示）・`nix/home.nix`（`devDirs` を導出して activation で `mkdir`）・`tests/test-guard-destructive.sh`（DR1〜DR3）の3つ。変更したら **`git add .claude/dev-roots`**（flakeはgit追跡ファイルしか読まない）と **`nix eval`**、`bash .claude/tests/run.sh`、`bash .claude/setup.sh` を通す
-- `docs/` は `.gitignore` 対象の手元資料置き場。ハーネスの設計原則とスコープは `docs/harness-plan-2026-09-05.md`、未コミット差分の内訳は `docs/harness-changes-2026-09-05.md` にある
+- **削除の許可ルートの定義は `.claude/dev-roots` だけ**（1行1パス、`~/` 始まり、`#` から行末はコメント、前後の空白と末尾の `/` は無視。読む側3つは同じ読み方をする。現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）。読む側は `guard-destructive.sh`（`ALLOWED_ROOTS` と理由文の表示）・`nix/home.nix`（`devDirs` を導出して activation で `mkdir`）・`tests/test-guard-destructive.sh`（DR1〜DR3）の3つ。変更したら **`git add .claude/dev-roots`**（flakeはgit追跡ファイルしか読まない）と **`nix eval`**、`bash .claude/tests/run.sh`、`bash .claude/setup.sh` を通す
+- `docs/` は `.gitignore` 対象の手元資料置き場。ハーネスの設計原則とスコープは `docs/harness-plan-2026-09-05.md`、未コミット差分の内訳は `docs/harness-changes-2026-09-05.md`、非エンジニア向け解説と技術解説は `docs/claude-code-harness-guide.md` にある。レビュー後の修正は `docs/<日付>-fix-<内容>.md` に「何を・なぜ・どう直したか」を記録する（例: `docs/2026-09-05-fix-guard-string-deny-and-dev-roots-grammar.md`）
 - 適用・更新・配布のコマンドは `README.md` の「コマンド」参照
 
 ## 変更後の検証（Claude Codeが自分で実行する。sudo不要）
@@ -52,8 +52,8 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 # flake.nix / nix/ を変更したとき（評価エラー・未 git add を検出。初回は数十秒。options.json の warning は上流由来で無視してよい）
 nix eval --raw .#darwinConfigurations.mac.system.drvPath
 # .claude/ 配下（settings.json・hooks/・skills/・dev-roots・setup.sh）や bootstrap.sh を変更したとき
-# （JSON・シェル構文・awk 構文・SKILL.md frontmatter のチェック＋フックのテーブル駆動テスト計 517 件
-#   （guard 332 / pr-mode 169 / validate 16）を数秒で実行）
+# （JSON・シェル構文・awk 構文・SKILL.md frontmatter のチェック＋フックのテーブル駆動テスト計 530 件
+#   （guard 345 / pr-mode 169 / validate 16）を数秒で実行）
 bash .claude/tests/run.sh
 # run.sh が使えない場合の個別実行: jq empty .claude/settings.json / bash -n <スクリプト>
 ```
