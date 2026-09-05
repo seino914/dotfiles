@@ -8,9 +8,14 @@ HOOK="$HOOKS_DIR/pr-mode.sh"
 S_ON=test-prmode-on-$$
 S_OFF=test-prmode-off-$$
 S_OTHER=test-prmode-other-$$
-cleanup() { rm -f "$T"/claude-pr-mode-test-prmode-*-$$; rm -rf "$T"/claude-prmode-test-repo-*.$$ "$T"/claude-prmode-libless.$$; }
+# フックは異常時に $HOME/.claude/pr-mode.log へ書く。壊れた入力や session_id 欠落のケースで本物のログを汚さないよう、
+# テスト中だけ HOME を一時ディレクトリに向ける（フックは HOME をログの場所にしか使わない。run.sh がテスト前後の行数で検査する）
+export HOME="$T/claude-prmode-home.$$"
+mkdir -p "$HOME/.claude"
+cleanup() { rm -f "$T"/claude-pr-mode-test-prmode-*-$$; rm -rf "$T"/claude-prmode-test-repo-*.$$ "$T"/claude-prmode-libless.$$ "$T"/claude-prmode-home.$$; }
 trap cleanup EXIT
 cleanup
+mkdir -p "$HOME/.claude"
 
 # PermissionRequest の判定を確認する: label expected session cmd [cwd]
 pr() { report "$1" "$2" "$(decision_of "$(run_hook "$HOOK" PermissionRequest "$3" "$4" "" "" "${5-/tmp}")")" "$4"; }
@@ -253,5 +258,14 @@ r=absent
 [ -e "$T/claude-pr-mode-" ] && r="present（空サフィックス）"
 [ -e "$T/claude-pr-mode-unknown" ] && r="present（unknown）"
 report E05-no-stray-flag absent "$r" ""
+# 異常時のログは（隔離した）$HOME/.claude/pr-mode.log に書かれ、文言が文字化けしていない
+# （bash 5.3 は "$var）" のように変数展開の直後に全角文字が続くと ）の先頭バイトを落とすことがある。
+#   フックは ${var}） の形で書く。壊れると「イベント（��を無視」のようになる）
+[ -f "$HOME/.claude/pr-mode.log" ] && r=present || r=absent
+report E06-log-in-isolated-home present "$r" "$HOME/.claude/pr-mode.log"
+grep -qF 'session_id が無いイベント（）を無視しました' "$HOME/.claude/pr-mode.log" 2>/dev/null && r=ok || r="文言が一致しない: $(grep -a 'イベント' "$HOME/.claude/pr-mode.log" 2>/dev/null | tail -1)"
+report E07-log-message-not-garbled ok "$r" ""
+grep -qF 'session_id が無いイベント（Stop）を無視しました' "$HOME/.claude/pr-mode.log" 2>/dev/null && r=ok || r="文言が一致しない"
+report E07b-log-message-with-event ok "$r" ""
 
 summary "pr-mode.sh"
