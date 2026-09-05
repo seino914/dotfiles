@@ -1,0 +1,10 @@
+# Claude Code が確認なしでファイルを削除・移動できる作業ルート（1 行 1 パス、~/ 始まり。# から行末はコメント、
+# 前後の空白と末尾の / は無視、~/ 始まり以外の行は読まれない。読む側 3 つは同じ読み方をする）。
+# ここが唯一の定義。読む側:
+#   - .claude/hooks/guard-destructive.sh …… 削除の許可ルート（この配下と一時領域だけ確認なしで削除できる）
+#   - nix/home.nix …………………………………… activation でディレクトリを作成する
+#   - .claude/tests/test-guard-destructive.sh … 各ルートで削除が通り、ルート自身は拒否されることを検査する
+# 変更したら git add すること（flake は git が追跡するファイルしか読まない）
+~/Dev/kaishi
+~/Dev/seino914
+~/Dev/hobby

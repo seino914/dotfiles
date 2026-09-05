@@ -13,3 +13,4 @@ ms-ceintl.vscode-language-pack-ja
 ms-vscode-remote.remote-containers
 pkief.material-icon-theme
 ritwickdey.liveserver
+unifiedjs.vscode-mdx
