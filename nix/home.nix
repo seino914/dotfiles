@@ -24,6 +24,20 @@ let
       force = true;
     };
   };
+
+  # ~/.zshrc をこのリポジトリの zsh/.zshrc へ切り替えるかどうか（既定: 切り替えない）。
+  # 現在は旧リポジトリ ~/dotfiles/zsh/.zshrc へのリンクを意図的に使っている（ユーザーの決定）。
+  # このリポジトリの zsh 設定へ移行すると決めたら true にして `sudo darwin-rebuild switch` を
+  # 実行するだけでよい（force = true で既存リンクを置き換える。手順は zsh/README.md）。
+  # ユーザーの指示なしに true にしないこと
+  manageZshrc = false;
+
+  # ~/Dev 配下の作業用ルートディレクトリ。唯一の定義は .claude/dev-roots（1 行 1 パス、~/ 始まり。
+  # guard-destructive.sh の削除許可ルートと同じファイルを読む）。新しいMacでも同じ配置で作業を
+  # 始められるようにする（中身の各リポジトリは対象外）。flake は git 追跡ファイルしか読めないので、
+  # dev-roots を変更したら git add すること
+  devDirs = map (p: "${config.home.homeDirectory}/${lib.removePrefix "~/" p}")
+    (lib.filter (l: lib.hasPrefix "~/" l) (lib.splitString "\n" (builtins.readFile ../.claude/dev-roots)));
 in
 {
   home.username = username;
@@ -32,14 +46,27 @@ in
   # home-managerの互換バージョン（変更しない）
   home.stateVersion = "25.05";
 
-  # ~/.zshrc はリポジトリ実体への「書き込み可能なリンク」にする。
-  # home-manager標準のstore管理だと読み取り専用になり、
-  # リポジトリ側を直接編集して即反映という現在の運用ができなくなるため
-  home.file = {
-    ".zshrc".source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/zsh/.zshrc";
-  }
-  // editorUserFiles "Code" # VSCode
-  // editorUserFiles "Cursor";
+  # ~/.zshrc は既定では管理しない（manageZshrc = false。上記コメント参照）。
+  # 以前あった無条件の .zshrc 宣言は旧リンクと衝突して activation 全体
+  # （VSCode/Cursor 設定・拡張機能・setup.sh・claude-notify）を止めていたため、
+  # トグル付き・force = true の形に置き換えた
+  home.file = editorUserFiles "Code" # VSCode
+    // editorUserFiles "Cursor"
+    // lib.optionalAttrs manageZshrc {
+      ".zshrc" = {
+        source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/zsh/.zshrc";
+        force = true;
+      };
+    };
+
+  # .claude/dev-roots の各ディレクトリを activation 時に用意する（既にあれば何もしない）。
+  # bootstrap.sh の初回適用でも 2回目以降の darwin-rebuild switch でも走る。
+  # activation の PATH は最小構成なので mkdir は coreutils のフルパスで呼ぶ。
+  # 作業ディレクトリは作れて当然なので失敗時は switch を止める
+  # （claude-notify の soft fail とは意図的に非対称）
+  home.activation.createDevDirs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    run ${pkgs.coreutils}/bin/mkdir -p ${lib.escapeShellArgs devDirs}
+  '';
 
   # 拡張機能は「ファイル」ではなく「インストール状態」なのでリンクでは管理できない。
   # vscode/extensions.txt のIDリストを activation 時に VSCode / Cursor へ流し込む。
@@ -53,16 +80,20 @@ in
   # setup.sh は「リンクが実体ファイルで上書きされた場合に実体側を
   # リポジトリへ取り込んでからリンクし直す」セルフヒーリングを持ち、
   # home-managerの宣言管理では再現できないため、あえて移行しない
+  # setup.sh は配布対象を「git が知るファイル」に限定するため git を PATH に通す
+  # （activation の PATH は最小構成で git が無い）
   home.activation.linkClaudeConfig = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    run /bin/bash ${dotfilesPath}/.claude/setup.sh
+    run env PATH="${pkgs.git}/bin:$PATH" /bin/bash ${dotfilesPath}/.claude/setup.sh
   '';
 
   # direnv: .envrc のあるプロジェクトディレクトリに cd した瞬間、
   # そのプロジェクトの flake.nix devShell を自動で有効化/無効化する。
   # nix-direnv は devShell の評価結果をキャッシュして即座に切り替えるための拡張
   # （direnvrc の配線も home-manager が自動生成する）。
-  # zsh へのフックは ~/.zshrc が mkOutOfStoreSymlink 管理（home-manager 非管理）のため
-  # enableZshIntegration では注入されず、zsh/.zshrc に直接記述している
+  # zsh へのフックは ~/.zshrc が home-manager 非管理（旧 ~/dotfiles を指す）のため
+  # enableZshIntegration では注入されない。フックは実際に効いている旧
+  # ~/dotfiles/zsh/.zshrc と、切り替え後に備えて本リポジトリの zsh/.zshrc の
+  # 両方に直書きしてある
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;
