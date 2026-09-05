@@ -1,5 +1,7 @@
 # VSCode / Cursor 共通設定
 
+## 概要
+
 VSCodeとCursorの設定の**実体**を置くディレクトリ。CursorはVSCodeのフォークで設定ファイルの形式・配置が同じため、両エディタでここの同一ファイルを共有する。
 
 適用は [nix/home.nix](../nix/home.nix) が担う：各エディタのUserディレクトリ（`~/Library/Application Support/{Code,Cursor}/User/`）からここへの**書き込み可能なシンボリックリンク**を張るため、どちらのエディタのUIから設定を変更してもこのディレクトリのファイルに直接書き込まれ、git差分として現れる。
@@ -7,10 +9,10 @@ VSCodeとCursorの設定の**実体**を置くディレクトリ。CursorはVSCo
 ## ファイル構成
 
 | ファイル | 役割 |
-|---|---|
+| :--- | :--- |
 | [`settings.json`](settings.json) | エディタ設定の実体。両エディタから同一内容が参照される |
 | [`keybindings.json`](keybindings.json) | キーバインドの実体。両エディタから同一内容が参照される |
-| [`extensions.txt`](extensions.txt) | 導入する拡張機能のIDリスト（1行1ID、`#` で始まる行はコメント）。 |
+| [`extensions.txt`](extensions.txt) | 導入する拡張機能のIDリスト（1行1ID、`#` で始まる行はコメント） |
 | [`install-extensions.sh`](install-extensions.sh) | `extensions.txt` の拡張機能をVSCode/Cursorへインストールする冪等スクリプト。`darwin-rebuild switch` 時にhome-manager activationから自動実行される |
 
 ## 仕組みと設計理由
