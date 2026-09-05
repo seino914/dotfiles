@@ -115,7 +115,7 @@ nix flake update
 - `bash vscode/install-extensions.sh`：`vscode/extensions.txt`の拡張機能をVSCode/Cursorへ導入（`darwin-rebuild switch`時にも自動実行される。冪等）
 
 ### 検証（sudo不要）
-- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter）とフック（pr-mode・guard-destructive・validate-claude-config）のテーブル駆動テスト計530件を数秒で実行。`.claude/hooks/`を変更したら必ず通す
+- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter）とフック（pr-mode・guard-destructive・validate-claude-config）のテーブル駆動テスト計533件を数秒で実行。`.claude/hooks/`を変更したら必ず通す
 - `nix eval --raw .#darwinConfigurations.mac.system.drvPath`：`flake.nix` / `nix/`の評価エラーと`git add`漏れを検出（`switch`の前に流す。options.jsonのwarningは上流由来で無視してよい）
 - `.claude/dev-roots`（削除・作業ディレクトリの許可ルート。1行1パス・`~/`始まり・`#`から行末はコメント）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
 
