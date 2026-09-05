@@ -95,7 +95,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 
 判定は 4 段構造で、上から順に評価して最初に決まった deny で終了する。ask は保留して最後に 1 つだけ出す（`killall …; rm -rf ~/Documents` のように ask 対象と deny 対象が混ざったコマンドが ask へ格下げされないように）：
 
-1. **致命 deny**（生文字列で判定するので引用符の中でも止まる）：ルート・ホーム直下の `rm`、`~/.claude` および dotfiles の `.claude` を対象にした `rm` / `mv`（`settings.json`・`CLAUDE.md` は単一ファイルの `rm` でも止める）、`.claude` 配下の設定実体（`hooks` / `skills` / `agents` 等）の再帰削除・移動、`curl|sh` 等のリモートスクリプトのパイプ実行（多段パイプ・`bash <(curl …)`・`sh -c "$(curl …)"`・`eval "$(curl …)"`・`source <(curl …)` / `. <(curl …)` の形も含む）、ディスク操作（`diskutil erase` / `apfs delete`・`dd of=/dev/`・`mkfs` 等）
+1. **致命 deny**（生文字列で判定するので引用符の中でも止まる。`eval` / `sh -c` / `… | sh` / `bash <<EOF` のようにシェルへ文字列を渡す形では、その文字列を bash が実行するので元のコマンド文字列全体にも同じ判定を掛ける。`bash -c "rm -rf ~"` は deny）：ルート・ホーム直下の `rm`、`~/.claude` および dotfiles の `.claude` を対象にした `rm` / `mv`（`settings.json`・`CLAUDE.md` は単一ファイルの `rm` でも止める）、`.claude` 配下の設定実体（`hooks` / `skills` / `agents` 等）の再帰削除・移動、`curl|sh` 等のリモートスクリプトのパイプ実行（多段パイプ・`bash <(curl …)`・`sh -c "$(curl …)"`・`eval "$(curl …)"`・`source <(curl …)` / `. <(curl …)` の形も含む）、ディスク操作（`diskutil erase` / `apfs delete`・`dd of=/dev/`・`mkfs` 等）
 2. **削除の範囲判定**（`rm` / `rmdir` / `unlink` / `find -delete` / `mv`。`\rm` / `/bin/rm` の表記も含む）：対象を 1 つずつ絶対パスへ解決し、`dev-roots` の各ルートと一時領域（`$TMPDIR`・`/tmp/claude-*`。`TMPDIR` 未設定時は `/tmp` 全体ではなく `/tmp/claude-*` だけ）の**内側**なら確認なしで通す。解決できて外側（`~/Dev` 直下・ホーム・その上・許可ルートそのもの）なら **deny**。解決できない書き方は理由を添えた **ask**。加えて dotfiles リポジトリ自体・`.claude` の設定実体・作業中ディレクトリ自身やその親の再帰削除は deny。相対パスは hook 入力の `cwd` 基準で解決し、glob は手前のディレクトリで判定する。カンマ区切りのブレース展開（`{dist,build}`）は bash と同じ順に展開して各パスを判定する（展開後に外へ出る `{dist,../../../Documents}` は deny）
 3. **削除語を含むが構造を解釈できない形** → **ask**：`eval` / `sh -c` / `… | sh` / `bash <<EOF` / `xargs` 経由、引用符や HEREDOC が閉じていない書き方
 4. **git / kill / chmod の ask**（必ず確認ダイアログ。auto modeでも省略されない）：作業ツリー・履歴を壊す git 操作（`reset --hard` / `clean -f` / `checkout`・`switch`・`restore` での全変更破棄（`.` 対象、`-f` / `--force` / `--discard-changes`。`restore --staged .` は index だけなので対象外）/ `branch -D` / `stash drop`・`clear` / rebase（`--continue` / `--abort` 等の進行操作は対象外）/ `pull --rebase` / `commit --amend` / `filter-branch` / `reflog expire`・`update-ref -d` / `worktree remove --force`。`git checkout -b feat/add-config` のようなブランチ名は force 系と誤認しない）、`killall` / `pkill` / `kill <sig> -1`、絶対パスへの再帰 `chmod` / `chown`、リポジトリの `.git` の `rm`
@@ -116,7 +116,6 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - **git alias 経由**（`git -c alias.x=commit x`）。`pr-mode.sh` の拒否判定を素通りする
 - `trash` / `rsync --delete` / `> file` での空化 など、`rm` 以外の削除手段（`guard-destructive.sh`）
 - シンボリックリンク経由のパス（リンクを解決しない）。`find` は起点ディレクトリだけを検査する
-- **致命的な対象が文字列の中にある形**（`bash -c "rm -rf ~"` など）は deny ではなく **ask** になる。フックは文字列の中身を機械的に判定しない方針で、ダイアログで人が見て止める。裸の `rm -rf ~` は従来どおり deny
 
 なお `/pr` 外での `git commit` / `push` / `gh pr create` は、`eval` / `sh -c` 経由でも **deny のまま**（guard の「解釈不能は ask」の例外）。`pr-mode.sh` の意図は「Claude が試みること自体を抑止する」ことであり、ask にすると人の承認で通ってしまうため。
 

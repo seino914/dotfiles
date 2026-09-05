@@ -12,7 +12,9 @@
 # 判定は上から順に行い、最初に決まった deny で終了する。ask は保留して最後に 1 つだけ出す
 # （ask 対象と deny 対象を 1 コマンドに混ぜても deny が ask に格下げされない）:
 #   1. 致命 deny …… ルート / ホーム直下 / ~/.claude / dotfiles の .claude を対象にした rm・mv、
-#                    curl | sh 系のリモートスクリプト実行、ディスク操作。生文字列（引用符の中も含む）で見る
+#                    curl | sh 系のリモートスクリプト実行、ディスク操作。生文字列（引用符の中も含む）で見る。
+#                    シェルへ文字列を渡す形（eval / sh -c / … | sh / bash <<EOF）では、その文字列を bash が
+#                    実行するので、元のコマンド文字列全体（引用符の中身・HEREDOC 本文を含む）にも同じ判定を掛ける
 #   2. 削除の範囲判定 … rm / rmdir / unlink / find -delete / mv の対象を 1 つずつ解決する
 #        解決できて許可ルート（.claude/dev-roots の各行）か一時領域（$TMPDIR・/tmp/claude-*）の内側 → 通す
 #        解決できて外側（~/Dev 直下・ホーム・許可ルートそのもの）→ deny
@@ -102,21 +104,38 @@ CLAUDE_CORE='(hooks|skills|agents|settings\.json|CLAUDE\.md)'
 DEL_RE="(^|[[:space:];&|\"'\`(${PH}])(rm|rmdir|unlink)([[:space:]${PH}]|\$)|find[[:space:]${PH}][^\"']*-delete"
 
 # ---- 1. 致命 deny（生文字列で判定。引用符の中やコマンド置換の中でも止める）----
-printf '%s' "$raw1" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?([^[:space:]]*/)?rm[[:space:]]+(-[A-Za-z]+[[:space:]]+)*[\"']?(/|/\*|${HOME_RE}/?\*?)[\"']?([[:space:];&|]|$)" \
-  && deny "ルート / ホーム直下の削除は禁止です"
-printf '%s' "$raw1" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?([^[:space:]]*/)?(rm|mv)[[:space:]]+(-[A-Za-z]+[[:space:]]+)*[\"']?(${HOME_RE}/\.claude|[^[:space:]]*dotfiles/\.claude)/?\*?[\"']?([[:space:];&|]|$)" \
-  && deny "~/.claude（Claude Code のグローバル設定）の削除・移動は禁止です"
-# .claude 配下の設定実体（hooks / skills / agents / settings.json / CLAUDE.md）の再帰削除・移動
-# （dotfiles 側は許可ルートの内側なので範囲判定では止まらない。単一ファイルの rm は開発中の整理として許す）
-printf '%s' "$raw1" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?([^[:space:]]*/)?(rm[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*[rR][A-Za-z]*[[:space:]]+(-[A-Za-z]+[[:space:]]+)*|mv[[:space:]]+(-[A-Za-z]+[[:space:]]+)*)[\"']?(${HOME_RE}/\.claude|[^[:space:]]*dotfiles/\.claude)/${CLAUDE_CORE}([/[:space:]\"';&|]|$)" \
-  && deny "~/.claude / dotfiles/.claude の設定実体（hooks・skills 等）の再帰削除・移動は禁止です"
-# リモートスクリプトの実行: curl … | sh（途中に tee 等を挟む形も）、bash <(curl …)、sh -c "$(curl …)"、eval "$(curl …)"、source <(curl …)
-printf '%s' "$s1" | grep -Eq -- "${SEP}(curl|wget)[[:space:]][^;]*\|[[:space:]]*(sudo[[:space:]]+)?((ba|z|da)?sh|python3?|ruby|perl|node|php)([[:space:]]|$)" \
-  && deny "リモートスクリプトをシェルへ直接パイプする実行は禁止です（ダウンロードして内容を確認してから実行してください）"
-printf '%s' "$s1" | grep -Eq -- "${SEP}"'((sudo[[:space:]]+)?([^[:space:]]*/)?(ba|z|da)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*(<\(|-[A-Za-z]*c[A-Za-z]*[[:space:]]+\$\()|(eval|source|\.)[[:space:]]+(<\(|\$\())[[:space:]]*(curl|wget)[[:space:]]' \
-  && deny "リモートスクリプトをシェルへ直接渡す実行は禁止です（ダウンロードして内容を確認してから実行してください）"
-printf '%s' "$s1" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?(diskutil[[:space:]]+(erase|partition|reformat|zero|secureErase|randomDisk|apfs[[:space:]]+(delete|erase)[A-Za-z]*)|dd[[:space:]][^;|]*of=/dev/|mkfs|newfs_)" \
-  && deny "ディスクの消去・パーティション操作は禁止です"
+# 引数: 対象パスを見る文字列（引用符を残し、引用符の中の空白は \001）, コマンド列を見る文字列（引用符の中身を除去済み）
+fatal_deny() {
+  local p="$1" c="$2"
+  # コマンド語の直前の区切りに引用符も含める（bash -c "rm -rf ~" を元の文字列で見るとき、rm の直前は " になる）
+  local SEP='(^|[;&|(`\\"'"'"'][[:space:]]*|[[:space:]])'
+  printf '%s' "$p" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?([^[:space:]]*/)?rm[[:space:]]+(-[A-Za-z]+[[:space:]]+)*[\"']?(/|/\*|${HOME_RE}/?\*?)[\"']?([[:space:];&|]|$)" \
+    && deny "ルート / ホーム直下の削除は禁止です"
+  printf '%s' "$p" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?([^[:space:]]*/)?(rm|mv)[[:space:]]+(-[A-Za-z]+[[:space:]]+)*[\"']?(${HOME_RE}/\.claude|[^[:space:]]*dotfiles/\.claude)/?\*?[\"']?([[:space:];&|]|$)" \
+    && deny "~/.claude（Claude Code のグローバル設定）の削除・移動は禁止です"
+  # .claude 配下の設定実体（hooks / skills / agents / settings.json / CLAUDE.md）の再帰削除・移動
+  # （dotfiles 側は許可ルートの内側なので範囲判定では止まらない。単一ファイルの rm は開発中の整理として許す）
+  printf '%s' "$p" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?([^[:space:]]*/)?(rm[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*[rR][A-Za-z]*[[:space:]]+(-[A-Za-z]+[[:space:]]+)*|mv[[:space:]]+(-[A-Za-z]+[[:space:]]+)*)[\"']?(${HOME_RE}/\.claude|[^[:space:]]*dotfiles/\.claude)/${CLAUDE_CORE}([/[:space:]\"';&|]|$)" \
+    && deny "~/.claude / dotfiles/.claude の設定実体（hooks・skills 等）の再帰削除・移動は禁止です"
+  # リモートスクリプトの実行: curl … | sh（途中に tee 等を挟む形も）、bash <(curl …)、sh -c "$(curl …)"、eval "$(curl …)"、source <(curl …)
+  printf '%s' "$c" | grep -Eq -- "${SEP}(curl|wget)[[:space:]][^;]*\|[[:space:]]*(sudo[[:space:]]+)?((ba|z|da)?sh|python3?|ruby|perl|node|php)([[:space:]\"';&|]|$)" \
+    && deny "リモートスクリプトをシェルへ直接パイプする実行は禁止です（ダウンロードして内容を確認してから実行してください）"
+  printf '%s' "$c" | grep -Eq -- "${SEP}"'((sudo[[:space:]]+)?([^[:space:]]*/)?(ba|z|da)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*(<\(|-[A-Za-z]*c[A-Za-z]*[[:space:]]+\$\()|(eval|source|\.)[[:space:]]+(<\(|\$\())[[:space:]]*(curl|wget)[[:space:]]' \
+    && deny "リモートスクリプトをシェルへ直接渡す実行は禁止です（ダウンロードして内容を確認してから実行してください）"
+  printf '%s' "$c" | grep -Eq -- "${SEP}(sudo[[:space:]]+)?(diskutil[[:space:]]+(erase|partition|reformat|zero|secureErase|randomDisk|apfs[[:space:]]+(delete|erase)[A-Za-z]*)|dd[[:space:]][^;|]*of=/dev/|mkfs|newfs_)" \
+    && deny "ディスクの消去・パーティション操作は禁止です"
+}
+fatal_deny "$raw1" "$s1"
+# シェルへ文字列を渡す形（eval / bash -c / sh -c / … | sh / bash <<EOF。単語としての eval / sh だけ。tests/eval や ssh では発動しない）は、
+# その文字列を bash が実行するので、元のコマンド文字列全体（引用符の中身・HEREDOC 本文を含む）にも致命 deny を掛ける。
+# 致命対象でなければ段 3 で ask になる
+SHELL_STR_RE='(^|[[:space:];&|(`])(eval[[:space:]]|([^[:space:]]*/)?(ba|z|da|k)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*c[A-Za-z]*([[:space:]]|$))|\|[[:space:]]*([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]|$)|(^|[[:space:];&|(`])([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]*<<'
+shell_string=0
+if printf '%s' "$raw1" | grep -Eq -- "$SHELL_STR_RE"; then
+  shell_string=1
+  cmd1=${cmd//\\$'\n'/ }; cmd1=$(printf '%s' "$cmd1" | tr '\n' ';')
+  fatal_deny "$cmd1" "$cmd1"
+fi
 
 # ---- 2. 削除の範囲判定 ----
 norm_path() { # 絶対パスの . と .. を解決する（実在しなくてよい）
@@ -363,14 +382,10 @@ while IFS= read -r seg; do
 done < <(extract_segs find)
 
 # ---- 3. 削除語を含むが構造を解釈できない形 → ask ----
-SHELL_ASK="文字列をシェルに渡して実行し、その中で削除を行うコマンドです。中身を機械的に判定できないため確認してください"
-# bash -c "…" / sh -c / eval … / … | sh（単語としての eval / sh だけ。tests/eval や ssh では発動しない）
-if printf '%s' "$raw1" | grep -Eq -- '(^|[[:space:];&|(`])(eval[[:space:]]|([^[:space:]]*/)?(ba|z|da|k)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*c[A-Za-z]*([[:space:]]|$))|\|[[:space:]]*([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]|$)'; then
-  printf '%s' "$raw1" | grep -Eq -- "$DEL_RE" && ask "$SHELL_ASK"
-fi
-# HEREDOC でシェルに流す形（bash <<'EOF' … EOF）は本文が raw1 から除かれているので元のコマンド文字列を見る
-if printf '%s' "$raw1" | grep -Eq -- '(^|[[:space:];&|(`])([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]*<<'; then
-  printf '%s' "$cmd" | grep -Eq -- "$DEL_RE" && ask "$SHELL_ASK"
+# シェルへ文字列を渡す形（段 1 で検出済み。致命対象は段 1 で deny 済み）で、その文字列に削除語があれば ask。
+# 引用符の中身も HEREDOC 本文も見る必要があるので元のコマンド文字列で判定する
+if [ "$shell_string" -eq 1 ]; then
+  printf '%s' "$cmd" | grep -Eq -- "$DEL_RE" && ask "文字列をシェルに渡して実行し、その中で削除を行うコマンドです。中身を機械的に判定できないため確認してください"
 fi
 if [ "$parse_failed" -eq 1 ]; then
   printf '%s' "$cmd" | grep -Eq -- "$DEL_RE" && ask "引用符または HEREDOC が閉じておらず構文を解釈できないコマンドです。削除を含むため、意図した形か確認してください"
