@@ -226,6 +226,126 @@ s X19 ask  Write "$R/a.pem" "x-----BEGIN ""RSA PRIVATE KEY-----"           # ヘ
 s X20 ask  Write "$R/a.pem" "-----BEGIN ""RSA PRIVATE KEY X PRIVATE KEY BLOCK-----"
 out=$(run_tool Write "$R/a.asc" "$KEY_PGP"); reason_has X21 "$out" '秘密鍵（-----BEGIN PGP PRIVATE KEY BLOCK-----）'
 
+echo "# 秘密鍵: ヘッダの後ろに鍵本体（base64）がある場合だけ拾う。ヘッダ文字列を扱うコードや本体が空・プレースホルダの例は通す"
+B64="MIIEowIBAAKCAQEA$(rep 'q7Zt/K3vXb+9' 4)"                  # 64 文字の本体行（大文字・小文字・数字・+/ 入り）
+BEG="-----BEGIN "; END="-----END "
+s K01 none Write "$R/pem.ts" "const HEADER = \"${BEG}PRIVATE KEY-----\"; if (pem.startsWith(HEADER)) { return parse(pem); }"
+s K02 none Write "$R/pem.py" "PEM_RE = re.compile(r'${BEG}RSA PRIVATE KEY-----')
+def load(path):
+    return PEM_RE.search(open(path).read())"
+s K03 none Write "$R/README.md" "${BEG}RSA PRIVATE KEY-----
+...
+${END}RSA PRIVATE KEY-----"                                                 # 本体が ...
+s K04 none Write "$R/README.md" "${BEG}RSA PRIVATE KEY-----
+<key>
+${END}RSA PRIVATE KEY-----"
+s K05 none Write "$R/a.pem" "${BEG}EC PRIVATE KEY-----
+${END}EC PRIVATE KEY-----"                                                  # 本体が空
+s K06 none Write "$R/README.md" "${BEG}PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASC...
+${END}PRIVATE KEY-----"                                                     # 本体の書き出しだけ（40 文字未満で ... 付き）
+s K07 none Write "$R/a.pem" "${BEG}RSA PRIVATE KEY-----
+$(rep x 64)
+${END}RSA PRIVATE KEY-----"                                                 # 本体が同じ文字の並び
+s K08 none Write "$R/a.json" "[\"${BEG}PRIVATE KEY-----\", \"${END}PRIVATE KEY-----\"]"
+s K09 none Write "$R/README.md" "鍵ファイルは \`${BEG}OPENSSH PRIVATE KEY-----\` で始まります。
+詳細は docs/ssh.md を参照してください。"
+s K10 none Write "$R/pem_test.go" "if !strings.HasPrefix(s, \"${BEG}EC PRIVATE KEY-----\") {
+	t.Fatalf(\"digest %s\", \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\")
+}"                                                                          # 後ろの hex（大文字なし）は本体とみなさない
+s K11 none Write "$R/a.json" "{\"key\": \"${BEG}RSA PRIVATE KEY-----\\n...\\n${END}RSA PRIVATE KEY-----\\n\"}"
+s K12 none Write "$R/a.py" "KEY = \"\"\"
+${BEG}RSA PRIVATE KEY-----
+<your private key>
+${END}RSA PRIVATE KEY-----
+\"\"\""
+s K20 ask  Write "$R/id_rsa" "${BEG}RSA PRIVATE KEY-----
+$B64
+$B64
+${END}RSA PRIVATE KEY-----"
+s K21 ask  Write "$R/sa.json" "{\"private_key\": \"${BEG}PRIVATE KEY-----\\n${B64}\\n${B64}\\n${END}PRIVATE KEY-----\\n\"}"   # \n エスケープの JSON
+s K22 ask  Write "$R/a.env" "KEY=${BEG}RSA PRIVATE KEY----- $B64 $B64 ${END}RSA PRIVATE KEY-----"   # 空白区切りで 1 行
+s K23 ask  Write "$R/a.pem" "${BEG}RSA PRIVATE KEY-----${B64}${B64}${END}RSA PRIVATE KEY-----"     # 区切りなしで 1 行
+s K24 ask  Write "$R/a.pem" "${BEG}RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,3F17F5316E2BAC89
+
+$B64
+${END}RSA PRIVATE KEY-----"                                                 # 暗号化 PEM のヘッダ行の後ろの本体
+s K25 ask  Write "$R/a.asc" "${BEG}PGP PRIVATE KEY BLOCK-----
+Version: GnuPG v2
+Comment: https://gpgtools.org
+
+$B64
+${END}PGP PRIVATE KEY BLOCK-----"
+s K26 ask  Write "$R/values.yaml" "tls:
+  key: |
+    ${BEG}EC PRIVATE KEY-----
+    $B64
+    ${END}EC PRIVATE KEY-----"                                              # インデントされた本体行
+s K27 ask  Write "$R/key.js" "const key = '${BEG}RSA PRIVATE KEY-----\\n' +
+  '${B64}\\n' +
+  '${END}RSA PRIVATE KEY-----';"                                            # 文字列の連結で書いた鍵
+CR=$'\r'
+s K28 ask  Write "$R/a.pem" "${BEG}RSA PRIVATE KEY-----${CR}
+${B64}${CR}
+${END}RSA PRIVATE KEY-----${CR}"                                            # CRLF
+s K29 ask  Write "$R/pem.ts" "const HEADER = \"${BEG}RSA PRIVATE KEY-----\";
+${BEG}RSA PRIVATE KEY-----
+$B64
+${END}RSA PRIVATE KEY-----"                                                 # ヘッダ文字列のコードの後ろにある本物
+s K30 ask  Write "$R/id_ed25519" "${BEG}OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAABlwAAAAdzc2gtcn
+${END}OPENSSH PRIVATE KEY-----"                                             # 同じ文字の連続（AAAA…）を含む本体
+s K31 ask  Write "$R/a.pem" "[\"${BEG}PRIVATE KEY-----\", \"${END}PRIVATE KEY-----\"] ${BEG}RSA PRIVATE KEY-----
+$B64"                                                                       # 同じ行の空のヘッダの後ろの本物
+out=$(run_tool Write "$R/a.pem" "x
+${BEG}EC PRIVATE KEY-----
+$B64"); reason_has K32 "$out" '秘密鍵（-----BEGIN EC PRIVATE KEY-----）'; reason_lacks K33 "$out" "${B64:16:16}"
+s K34 ask  Edit  "$R/a.pem" "${BEG}RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+DEK-Info: AES-128-CBC,3F17F5316E2BAC89
+"                                                                           # 付随ヘッダ行までで内容が終わる（本体は次の書き込み）
+s K35 none Write "$R/a.md" "${BEG}RSA PRIVATE KEY-----
+Proc-Type: 4,ENCRYPTED
+...
+${END}RSA PRIVATE KEY-----"                                                 # 付随ヘッダ行の後ろの本体がプレースホルダ
+
+echo "# OpenAI / Anthropic: sk- の後ろが URL のスラッグや kebab-case の識別子なら拾わない。本物の形式は拾う"
+s S01 none Write "$R/README.md" "参考: https://example.com/sk-""learn-tutorial-for-beginners-and-advanced-users-2024"
+s S02 none Write "$R/a.ts" "const id = \"sk-""component-library-integration-testing-module-v2\";"
+s S03 none Write "$R/a.md" "sk-""proj-migration-guide-for-legacy-api-users-2024"
+s S04 none Write "$R/a.md" "sk-""ant-design-system-components-for-react-apps"
+s S05 none Write "$R/a.md" "sk-""Learn-Python3-In-30-Days-For-Beginners-And-Pros"   # 大文字・数字入りでも英数字の連続が短い
+s S10 ask  Write "$R/a.txt" "OPENAI_API_KEY=sk-""proj-Ab3De5Fg7Hi9J_kL2mN4pQ6r-S8tU0vW2xY4zA_Bc5Dk7Fm9Hq-Jr2Ls4Nt6Pv8Rw"   # - と _ で区切られた本体（20 文字以上の連続なし）
+s S11 ask  Write "$R/a.txt" "sk-""ant-api03-$(rep 'Zq9Wx4Rt7Yu2_' 4)$(rep 'Kp3Mn8Bv5Cx1-' 3)AA"             # 13 文字ごとに _ / -
+s S12 ask  Write "$R/a.txt" "sk-""ant-admin01-$(rep 'Hj6Gf3Ds9Ae2' 5)"
+s S13 ask  Write "$R/a.txt" "sk-""svcacct-$(rep 'Pw4Lk7Jh2Gs9_' 4)"
+s S14 ask  Write "$R/a.txt" "sk-""$(rep 'Qw8Er5Ty' 3)T3Blbk""FJ$(rep 'Ui2Op4Zx' 2)"              # 旧形式（英数字 48 文字）
+out=$(run_tool Write "$R/a.txt" "x=sk-""proj-Ab3De5Fg7Hi9J_kL2mN4pQ6r-S8tU0vW2xY4zA_Bc5Dk7Fm9Hq-Jr2Ls4Nt6Pv8Rw"); reason_has S15 "$out" 'OpenAI API キー（sk-proj-…）'
+
+echo "# プレースホルダ: 連番と、本体が test / dummy / fake / example / sample / xxx で始まるもの"
+s Q01 none Write "$R/a.txt" "GH_TOKEN=gh""p_abcdefghijklmnopqrstuvwxyz0123456789"
+s Q02 none Write "$R/a.txt" "GH_TOKEN=gh""p_$(rep 0123456789 3)abcdef"
+s Q03 none Write "$R/a.txt" "GH_TOKEN=gh""p_test$(rep aB3 10)xy"
+s Q04 none Write "$R/a.txt" "GH_TOKEN=gh""p_Dummy$(rep aB3 10)x"
+s Q05 none Write "$R/a.txt" "GH_TOKEN=gh""p_fake$(rep aB3 10)xy"
+s Q06 none Write "$R/a.txt" "GH_TOKEN=gh""p_sample$(rep aB3 10)"
+s Q07 none Write "$R/a.txt" "GH_TOKEN=gh""p_xxx$(rep aB3 11)"
+s Q08 none Write "$R/a.txt" "GH_TOKEN=gh""p_TEST$(rep aB3 10)xy"
+s Q09 none Write "$R/a.txt" "aws_access_key_id = AK""IATESTJ7Q4M2N8K5P3"
+s Q10 none Write "$R/a.txt" "ANTHROPIC_API_KEY=sk-""ant-api03-test$(rep Zq9 11)"   # 版の区切り（api03-）の後ろが test
+s Q11 none Write "$R/.npmrc" "//registry.npmjs.org/:_authToken=npm""_test$(rep Np6 10)ab"
+s Q12 none Write "$R/a.txt" "SLACK_BOT_TOKEN=xox""b-1234567890-1234567890-abcdefghijklmnop"
+s Q13 none Write "$R/a.txt" "key=AI""zaSyABCDEFGHIJKLMNOPQRSTUVWXYZ0123456"
+s Q20 ask  Write "$R/a.txt" "GH_TOKEN=gh""p_abcd$(rep Xy7Q 8)"                     # 連番は一部だけ
+s Q21 ask  Write "$R/a.txt" "GH_TOKEN=gh""p_abcdefghijklmnop$(rep Xy7Q 5)"         # 連番が半分未満
+s Q22 ask  Write "$R/a.txt" "GH_TOKEN=gh""p_aB3test$(rep aB3 9)xy"                 # test が先頭でない
+s Q23 ask  Write "$R/a.txt" "aws_access_key_id = AK""IAJ7Q4M2N8K5P3TEST"           # test が末尾
+s Q24 ask  Write "$R/a.txt" "$(rep "GH_TOKEN=gh""p_abcdefghijklmnopqrstuvwxyz0123456789
+" 30)$(rep "gh""p_test$(rep aB3 10)xy
+" 30)token = $GHP"                                                          # 例示が大量に並んだ後ろの本物
+
 echo "# 性能: 語中の sk- などを大量に含む大きな内容でも、遅い照合に進まず短時間で通す"
 # 数 MB の内容はコマンド引数の長さの上限を超えるので、ファイル経由で入力 JSON を組み立てる
 run_file() { # label expected file content-file → 判定を report し、所要ミリ秒を MS に入れる
@@ -249,6 +369,17 @@ run_file X25 none "$R/a.txt" "$W/oneline.txt"                               # 1 
 awk 'BEGIN { for (i = 1; i <= 30000; i++) printf "-----BEGIN " "EXAMPLE PRIVATE KEY----- "; print "" }' > "$W/headers.txt"
 run_file X27 none "$R/a.txt" "$W/headers.txt"                               # 1 行に例示の鍵ヘッダが大量に並ぶ
 [ "$MS" -lt 3000 ] && report X28-fast "<3000ms" "<3000ms" "" || report X28-fast "<3000ms" "${MS}ms" "1 行に例示の鍵ヘッダ 3 万件で ${MS}ms かかった"
+awk 'BEGIN { for (i = 1; i <= 30000; i++) printf "\"-----BEGIN " "RSA PRIVATE KEY-----\", "; print "" }' > "$W/headers2.txt"
+run_file X29 none "$R/a.txt" "$W/headers2.txt"                              # 1 行に本体の無い鍵ヘッダ文字列が大量に並ぶ
+[ "$MS" -lt 3000 ] && report X30-fast "<3000ms" "<3000ms" "" || report X30-fast "<3000ms" "${MS}ms" "1 行に本体の無い鍵ヘッダ 3 万件で ${MS}ms かかった"
+awk 'BEGIN { for (i = 1; i <= 30000; i++) printf "  if (s.startsWith(\"-----BEGIN " "RSA PRIVATE KEY-----\")) return parseKeyMaterialFromString(s);\n" }' > "$W/headers3.txt"
+run_file X31 none "$R/a.ts" "$W/headers3.txt"                               # 本体の無い鍵ヘッダ文字列が大量の行に
+[ "$MS" -lt 3000 ] && report X32-fast "<3000ms" "<3000ms" "" || report X32-fast "<3000ms" "${MS}ms" "本体の無い鍵ヘッダ 3 万行で ${MS}ms かかった"
+awk 'BEGIN { printf "-----BEGIN " "RSA PRIVATE KEY-----\""; for (i = 1; i <= 1000000; i++) printf "a;b."; print "" }' > "$W/longfield.txt"
+run_file X33 none "$R/a.txt" "$W/longfield.txt"                             # ヘッダの直後に空白なしの長大な文字列
+[ "$MS" -lt 3000 ] && report X34-fast "<3000ms" "<3000ms" "" || report X34-fast "<3000ms" "${MS}ms" "ヘッダ直後の 4MB のフィールドで ${MS}ms かかった"
+printf '%s\n%s\n' "-----BEGIN ""RSA PRIVATE KEY-----" "$B64" >> "$W/headers3.txt"
+run_file X35 ask "$R/a.ts" "$W/headers3.txt"                                # 大量のヘッダ文字列の後ろにある本物は拾う
 
 echo "# ファイル自体がシンボリックリンク（~/.claude/settings.json → dotfiles の実体 と同じ形）: リンク先の実体で判定する"
 mkdir -p "$W/links" "$R/ignored"
