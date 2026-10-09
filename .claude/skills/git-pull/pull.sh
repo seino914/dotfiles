@@ -1,39 +1,53 @@
 #!/bin/bash
 # /git-pull スキルの本体。カレントディレクトリのリポジトリ（git リポジトリの外なら
-# 配下 3 階層までにあるリポジトリすべて）をデフォルトブランチへ切り替えて
-# git pull --ff-only する。1 リポジトリにつき 1 行で結果を出す。
+# 配下 3 階層までにあるリポジトリすべて）をデフォルトブランチへ切り替えて、
+# upstream を fetch してから git merge --ff-only する。1 リポジトリにつき 1 行で結果を出す。
 #
 # 安全側に倒すため、stash・rebase・reset はしない：
-#   スキップ：追跡ファイルに未コミットの変更がある / origin が無い / 切り替えに失敗 /
-#             切り替えか pull で .gitignore 対象の（無視された）ファイルが上書き・削除されうる
-#   失敗：pull が通らない（fast-forward できない・upstream が無い・ネットワーク等。git のエラー 1 行を添える）
-#         切り替えてから pull に失敗したときは元のブランチ（detached HEAD なら元のコミット）へ戻す
+#   スキップ：detached HEAD / 別のリポジトリの作業ツリー内にある入れ子リポジトリ（submodule・
+#             vendor/ 等にツールが置いたもの。カレントがリポジトリの中のときは対象外）/
+#             追跡ファイルに未コミットの変更がある / origin が無い / 切り替えに失敗 /
+#             切り替えか取り込みで .gitignore 対象の（無視された）ファイルが上書き・削除されうる
+#   失敗：取り込めない（fast-forward できない・upstream が無い・ネットワーク等。git のエラーを添える）
+#         切り替えてから失敗したときは元のブランチへ戻す
+#
+# pull ではなく fetch + merge --ff-only にするのは、ネットワークの往復を 1 回にするため
+# （無視ファイルの判定に fetch 後の upstream が要る。配下のリポジトリが多いと時間がかかる）と、
+# 判定した upstream のコミットそのものを取り込むため（判定から取り込みまでにリモートが進んでも漏れない）。
+# merge は pull.rebase を読まず、--ff-only は merge.ff・branch.<name>.mergeOptions より優先される
 
 set -u
 export GIT_TERMINAL_PROMPT=0 # 認証プロンプトで止まらないようにする
 
-# git のエラー出力から最初の意味のある 1 行を取り出す
+# git のエラー出力から最初の意味のある 1 行を取り出す。「…would be overwritten by merge:」のように
+# 末尾が「:」の行は原因（ファイル名等）が次の行にあるので、次の 1 行を続けて出す
 first_error() {
-  local e
-  e="$(printf '%s\n' "$1" | grep -v -e '^hint:' -e '^$' | head -n 1)"
+  local lines e next
+  lines="$(printf '%s\n' "$1" | grep -v -e '^hint:' -e '^[[:space:]]*$')"
+  e="$(printf '%s\n' "$lines" | head -n 1)"
+  case "$e" in
+    *:)
+      next="$(printf '%s\n' "$lines" | sed -n '2s/^[[:space:]]*//p')"
+      [ -n "$next" ] && e="$e $next" ;;
+  esac
   printf '%s' "${e%.}" # 後ろに「。」を続けるので末尾のピリオドは落とす
 }
 
-# 切り替えた後で止めるとき、元の位置（detached HEAD なら元のコミット）へ戻して理由文の末尾を出す。
+# 切り替えた後で止めるとき、元のブランチへ戻して理由文の末尾を出す。
 # $1: 切り替えていない（元からデフォルトブランチ）ときの末尾
 back_suffix() {
   if [ "$orig" = "$default" ]; then
     printf '%s' "$1"
-  elif { [ -n "$orig" ] && git switch --quiet "$orig" 2>/dev/null; } ||
-    { [ -z "$orig" ] && [ -n "$orig_sha" ] && git switch --quiet --detach "$orig_sha" 2>/dev/null; }; then
-    printf '%s' "。${orig_label} に戻した"
+  elif git switch --quiet "$orig" 2>/dev/null; then
+    printf '%s' "。${orig} に戻した"
   else
-    printf '%s' "。${orig_label} に戻せず $default のまま"
+    printf '%s' "。${orig} に戻せず $default のまま"
   fi
 }
 
 # 作業ツリーの無視ファイル一覧（いまの .gitignore 等で判定）。無視ディレクトリは「dir/」1 行に
-# まとまるので node_modules 等が大きくても中を列挙しない。ls-files -o -i --directory は
+# まとまるので node_modules 等が大きくても中を列挙しない（追跡ファイルを含むディレクトリは
+# まとめられず、中の無視ファイルが 1 行ずつ出る）。ls-files -o -i --directory は
 # 「無視されない未追跡ディレクトリの中の無視ファイル」を出さないので status の「!!」行を使う
 list_ignored() {
   local out
@@ -52,15 +66,16 @@ head_or_empty() {
 # $1 から $2 へ変わるパスと無視ファイル一覧（$ignored）を突き合わせ、上書き・削除されうる
 # パスを 1 つ出す（無ければ何も出さない）。判定できなかったら非 0 を返す（呼び出し側はスキップする）。
 # 追跡済みのパスは無視ファイルになりえないので、$1（いまの HEAD）との差分だけ見れば足りる。
+# 無視ディレクトリの配下に加わるパスは、作業ツリーに実在するかを確かめず一律に衝突とする
+# （実在しなければ新しく作られるだけだが、確かめる処理の誤りは .env 等を失う側に倒れるため。
+#  誤ってスキップするのは、無視ディレクトリの中のファイルを対象ツリーが追跡するまれな場合だけ）。
 # 名前は両コマンドとも同じ規則で引用されるので、外側の "" だけ外して文字列のまま比べる
 ignored_conflict() {
-  local names cands kind a b rest c
+  local names
   [ -n "$ignored" ] || return 0
   names="$(git -c core.quotePath=false diff --name-only --no-renames "$1" "$2" -- 2>/dev/null)" || return 1
   [ -n "$names" ] || return 0
-  # 衝突が確実なら「C<TAB>パス」、無視ディレクトリの配下に加わるだけなら作業ツリーに実在するかで
-  # 決まるので「U<TAB>無視ディレクトリ<TAB>パス」を出す
-  cands="$(printf '%s\n\n%s\n' "$ignored" "$names" | LC_ALL=C awk -v icase="$(git config --bool core.ignorecase)" '
+  printf '%s\n\n%s\n' "$ignored" "$names" | LC_ALL=C awk -v icase="$(git config --bool core.ignorecase)" '
     function norm(s) {
       if (length(s) > 1 && substr(s, 1, 1) == "\"" && substr(s, length(s), 1) == "\"") s = substr(s, 2, length(s) - 2)
       return icase == "true" ? tolower(s) : s
@@ -70,53 +85,38 @@ ignored_conflict() {
     # （対象ツリーで祖先がファイルになると、配下の無視ファイルごと消される）
     !sep && $0 == "" { sep = 1; next }
     !sep {
-      s = norm($0); d = 0
-      if (substr(s, length(s), 1) == "/") { s = substr(s, 1, length(s) - 1); d = 1 }
-      ign[s] = $0; isdir[s] = d; e = $0 # 表示用には元の表記を残す
+      s = norm($0)
+      if (substr(s, length(s), 1) == "/") s = substr(s, 1, length(s) - 1)
+      ign[s] = $0; e = $0 # 表示用には元の表記を残す
       while ((i = lastslash(s)) > 0) { s = substr(s, 1, i - 1); if (!(s in anc)) anc[s] = e }
       next
     }
     {
       p = norm($0)
-      if (p in ign) { print "C\t" ign[p]; exit }
-      if (p in anc) { print "C\t" anc[p]; exit }
-      for (q = p; (i = lastslash(q)) > 0; ) {
+      if (p in ign) { print ign[p]; exit }   # 無視ファイル・無視ディレクトリそのもの
+      if (p in anc) { print anc[p]; exit }   # 無視ファイルの祖先（ファイルに変わる・消える）
+      for (q = p; (i = lastslash(q)) > 0; ) { # 無視ファイル・無視ディレクトリの配下
         q = substr(q, 1, i - 1)
-        if (!(q in ign)) continue
-        # 無視ファイルの位置にディレクトリが要る・引用されたパス（実在を確かめられない）は衝突とする
-        if (!isdir[q] || substr($0, 1, 1) == "\"") { print "C\t" $0; exit }
-        print "U\t" substr($0, 1, i - 1) "\t" $0; break
+        if (q in ign) { print $0; exit }
       }
-    }')" || return 1
-  while IFS=$'\t' read -r kind a b; do
-    case "$kind" in
-      C) printf '%s' "$a"; return 0 ;;
-      U) # 無視ディレクトリ $a から $b へ 1 段ずつ下り、$b が実在するか、途中がファイル・シンボリック
-         # リンクなら上書き・削除される。途中で無くなれば新しく作られるだけなので衝突しない
-        rest="${b#"$a"/}"; c="$a"
-        while :; do
-          c="$c/${rest%%/*}"
-          if [ "$c" = "$b" ]; then
-            if [ -e "$c" ] || [ -L "$c" ]; then printf '%s' "$b"; return 0; fi
-            break
-          fi
-          if [ -L "$c" ] || { [ -e "$c" ] && [ ! -d "$c" ]; }; then printf '%s' "$c"; return 0; fi
-          [ -d "$c" ] || break
-          rest="${rest#*/}"
-        done ;;
-    esac
-  done <<EOF
-$cands
-EOF
+    }'
 }
 
 update_repo() {
-  local dir="$1" name="$2" default before after err orig orig_sha orig_label label
-  local ignored remote target upstream hit
+  local dir="$1" name="$2" default before after err orig orig_sha
+  local ignored remote target upstream_ref upstream hit label
   cd "$dir" || { echo "- $name: スキップ（ディレクトリに入れない）"; return; }
 
   if ! git remote get-url origin >/dev/null 2>&1; then
     echo "- $name: スキップ（origin が無い）"; return
+  fi
+
+  # detached HEAD はすべてスキップする。ブランチに属さないコミットを置き去りにしないためと、
+  # ツールが特定のコミットに固定したリポジトリ（submodule 等）の固定を外さないため
+  orig="$(git branch --show-current)"
+  orig_sha="$(git rev-parse --verify --quiet HEAD)"
+  if [ -z "$orig" ]; then
+    echo "- $name: スキップ（detached HEAD。現在 ${orig_sha:0:7}）"; return
   fi
 
   default="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null)"
@@ -131,61 +131,51 @@ update_repo() {
     fi
   fi
 
-  # 元の位置を覚えておく（pull に失敗したら戻すため）。detached HEAD ではブランチ名が空になる
-  orig="$(git branch --show-current)"
-  orig_sha="$(git rev-parse --verify --quiet HEAD)"
-  orig_label="${orig:-detached HEAD (${orig_sha:0:7})}"
-
   if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-    echo "- $name: スキップ（未コミットの変更あり。現在 ${orig_label}）"; return
+    echo "- $name: スキップ（未コミットの変更あり。現在 ${orig}）"; return
   fi
 
   label="$default"
   if [ "$orig" != "$default" ]; then
-    label="$orig_label → $default"
+    label="$orig → $default"
     # 切り替え先はローカルのデフォルトブランチ。無ければ git switch が origin/<default> から作る。
     # 切り替えで消してよいかは、いまのブランチの .gitignore で判定される
     target="$(git rev-parse --verify --quiet "refs/heads/$default" || git rev-parse --verify --quiet "refs/remotes/origin/$default")"
     if [ -n "$target" ]; then
       if ! ignored="$(list_ignored)" || ! hit="$(ignored_conflict "$(head_or_empty)" "$target")"; then
-        echo "- $name: スキップ（$default への切り替えで無視ファイルが上書きされないか判定できない。現在 ${orig_label}）"; return
+        echo "- $name: スキップ（$default への切り替えで無視ファイルが上書きされないか判定できない。現在 ${orig}）"; return
       elif [ -n "$hit" ]; then
-        echo "- $name: スキップ（$default への切り替えで無視ファイル $hit が上書き・削除されうる。現在 ${orig_label}）"; return
+        echo "- $name: スキップ（$default への切り替えで無視ファイル $hit が上書き・削除されうる。現在 ${orig}）"; return
       fi
     fi
     if ! git switch --quiet "$default" 2>/dev/null; then
-      echo "- $name: スキップ（$default へ切り替えられない。現在 ${orig_label}）"; return
+      echo "- $name: スキップ（$default へ切り替えられない。現在 ${orig}）"; return
     fi
   fi
 
-  # pull の取り込み先（upstream）でも無視ファイルが上書きされないか、切り替えた後の .gitignore で
-  # 確かめる（元のブランチでは無視されないファイルが、ここでは無視されることがある）。
-  # 無視ファイルがあるときだけ、取り込み先を知るため先に fetch する。pull を fetch + merge --ff-only に
-  # 分けると pull.rebase・submodule.recurse 等の設定や upstream の解決・エラー文が pull と変わるので、
-  # pull はそのまま使い 2 回目の fetch は許容する（新しいオブジェクトは無いので往復だけで済む）。
-  # fetch から pull までの間にリモートが進んだ分は判定から漏れる
-  if ! ignored="$(list_ignored)"; then
-    echo "- $name: スキップ（$label の pull で無視ファイルが上書きされないか判定できない$(back_suffix "。現在 ${orig_label}")）"; return
+  # 取り込み先（upstream）を fetch する
+  remote="$(git config "branch.$default.remote" 2>/dev/null)"
+  upstream_ref="$(git for-each-ref --format='%(upstream)' "refs/heads/$default" 2>/dev/null)"
+  if [ -z "$remote" ] || [ -z "$upstream_ref" ]; then
+    echo "- $name: 失敗（$label の pull に失敗: $default に upstream が設定されていない$(back_suffix "")）"; return
   fi
-  if [ -n "$ignored" ]; then
-    remote="$(git config "branch.$default.remote" 2>/dev/null)"
-    if ! err="$(git fetch --quiet "${remote:-origin}" 2>&1)"; then
-      # pull でも同じ fetch で失敗するので、pull の失敗と同じ形で出す
-      echo "- $name: 失敗（$label の pull に失敗: $(first_error "$err")$(back_suffix "")）"; return
-    fi
-    upstream="$(git for-each-ref --format='%(upstream)' "refs/heads/$default" 2>/dev/null)"
-    [ -n "$upstream" ] && upstream="$(git rev-parse --verify --quiet "$upstream")"
-    if [ -n "$upstream" ]; then
-      if ! hit="$(ignored_conflict "$(head_or_empty)" "$upstream")"; then
-        echo "- $name: スキップ（$label の pull で無視ファイルが上書きされないか判定できない$(back_suffix "。現在 ${orig_label}")）"; return
-      elif [ -n "$hit" ]; then
-        echo "- $name: スキップ（$label の pull で無視ファイル $hit が上書き・削除されうる$(back_suffix "。現在 ${orig_label}")）"; return
-      fi
-    fi
+  if ! err="$(git fetch --quiet "$remote" 2>&1)"; then
+    echo "- $name: 失敗（$label の pull に失敗: $(first_error "$err")$(back_suffix "")）"; return
+  fi
+  if ! upstream="$(git rev-parse --verify --quiet "$upstream_ref^{commit}")"; then
+    echo "- $name: 失敗（$label の pull に失敗: upstream ${upstream_ref#refs/remotes/} が見つからない$(back_suffix "")）"; return
   fi
 
-  before="$(git rev-parse HEAD)"
-  if ! err="$(git pull --ff-only --quiet 2>&1)"; then
+  # 取り込みでも無視ファイルが上書きされないか、切り替えた後の .gitignore で確かめる
+  # （元のブランチでは無視されないファイルが、ここでは無視されることがある）
+  if ! ignored="$(list_ignored)" || ! hit="$(ignored_conflict "$(head_or_empty)" "$upstream")"; then
+    echo "- $name: スキップ（$label の pull で無視ファイルが上書きされないか判定できない$(back_suffix "。現在 ${orig}")）"; return
+  elif [ -n "$hit" ]; then
+    echo "- $name: スキップ（$label の pull で無視ファイル $hit が上書き・削除されうる$(back_suffix "。現在 ${orig}")）"; return
+  fi
+
+  before="$(git rev-parse --verify --quiet HEAD)"
+  if ! err="$(git merge --ff-only --quiet "$upstream" 2>&1)"; then
     echo "- $name: 失敗（$label の pull に失敗: $(first_error "$err")$(back_suffix "")）"
     return
   fi
@@ -193,6 +183,8 @@ update_repo() {
 
   if [ "$before" = "$after" ]; then
     echo "= $name: $label は既に最新"
+  elif [ -z "$before" ]; then
+    echo "✓ $name: $label を更新（$(git rev-list --count "$after") コミット）"
   else
     echo "✓ $name: $label を更新（$(git rev-list --count "$before..$after") コミット）"
   fi
@@ -220,7 +212,12 @@ found=0
 while IFS= read -r -d '' gitdir; do
   repo="${gitdir%/.git}"
   found=1
+  # 親ディレクトリが別のリポジトリの作業ツリー内なら入れ子（submodule や、ツールが無視ディレクトリに
+  # 置いたリポジトリ）なのでスキップする。外側のリポジトリが固定したコミットを動かさないため
+  if git -C "$repo/.." rev-parse --show-toplevel >/dev/null 2>&1; then
+    echo "- ${repo#./}: スキップ（別のリポジトリの中にある入れ子リポジトリ）"; continue
+  fi
   (update_repo "$repo" "${repo#./}")
-done < <(find . -maxdepth 4 -name node_modules -prune -o -type d -name .git -print0 | sort -z)
+done < <(find . -maxdepth 4 -name node_modules -prune -o -type d -name .git -print0 -prune | sort -z)
 
 [ "$found" = 1 ] || echo "git リポジトリが見つからない（$(pwd)）"

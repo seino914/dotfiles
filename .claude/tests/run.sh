@@ -4,6 +4,7 @@
 # 内容: settings.json の JSON 構文、シェルスクリプトの構文、hooks/lib/*.awk の構文、
 #       SKILL.md / agents の frontmatter、フックのテーブル駆動テスト
 #       （pr-mode / guard-destructive / guard-secrets / validate-claude-config / verify-gate の5本。各テストの summary 行も検査する）、
+#       /git-pull スキルの pull.sh の挙動テスト（test-git-pull.sh。使い捨ての bare リポジトリで動かす）、
 #       settings.json のフック・statusLine の登録元検査
 # 環境変数 HOOKS_DIR を指定すると、別の場所にあるフック（作業コピー）をテストできる
 set -u
