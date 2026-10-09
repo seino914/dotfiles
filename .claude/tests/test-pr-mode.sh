@@ -124,9 +124,11 @@ pr B4X none "$S_ON" 'gh pr --repo=other/repo create --fill'
 pr B4Y none "$S_ON" 'gh pr -Rother/repo edit 16 --title t'
 pr B4Z none "$S_ON" 'gh -R other/repo pr create --fill'
 pr B4Z1 none "$S_ON" 'gh --repo other/repo pr edit 16 --title t'
-echo "#   gh pr edit: オプションの値（タイトル・本文・HEREDOC）の # や URL、ブランチ名の / では落とさない"
+echo "#   gh pr edit: オプションの値（タイトル・本文・HEREDOC）の # や URL では落とさない。位置引数は無いか数字だけ（PR 番号）のときだけ許す"
 pr B4Q allow "$S_ON" 'gh pr edit 16 --title "fix #1 (https://example.com/a)" --body "see #2"'
-pr B4R allow "$S_ON" 'gh pr edit feature/x --title t'
+pr B4R none "$S_ON" 'gh pr edit feature/x --title t'     # ブランチ名の位置引数は自動承認しない（番号だけを許す）
+pr B4R2 none "$S_ON" 'gh pr edit "16a" --title t'
+pr B4R3 none "$S_ON" 'gh pr edit 16 feature/x --title t'
 pr B4S allow "$S_ON" $'gh pr edit 16 --title "t" --body "$(cat <<\'EOF\'\n## 概要 #1 https://example.com/x\n- a && b\nEOF\n)"'
 pr B4T allow "$S_ON" 'gh pr edit 16 --body-file /tmp/body.md --title t'
 pr B4U allow "$S_ON" 'gh pr edit --title "#1" --body "x"'
@@ -173,6 +175,270 @@ pr B60d none "$S_ON" 'gh pr editx 1'
 pr B61 none "$S_ON" 'git commit-tree HEAD^{tree} -m x'
 pr B62 none "$S_ON" 'git pushx'
 pr B63 none "$S_ON" 'ls'
+
+echo "# F. デフォルトブランチが main / master 以外（origin/HEAD が develop 等）のリポジトリ"
+REPO_DEV="$T/claude-prmode-test-repo-dev.$$"; rm -rf "$REPO_DEV"; git init -q -b feat/x "$REPO_DEV" 2>/dev/null || { git init -q "$REPO_DEV"; git -C "$REPO_DEV" checkout -q -b feat/x; }
+git -C "$REPO_DEV" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/develop
+pr F01 allow "$S_ON" 'git push -u origin feat/x' "$REPO_DEV"
+pr F02 none "$S_ON" 'git push -u origin develop' "$REPO_DEV"
+pr F03 none "$S_ON" 'git push origin HEAD:develop' "$REPO_DEV"
+pr F04 none "$S_ON" 'git push origin feat/x:refs/heads/develop' "$REPO_DEV"
+pr F05 none "$S_ON" 'git push origin "develop"' "$REPO_DEV"
+pr F06 none "$S_ON" 'git push origin deve"lop"' "$REPO_DEV"
+pr F07 none "$S_ON" 'git push -u origin main' "$REPO_DEV"          # main / master は引き続き落とす
+pr F08 allow "$S_ON" 'git push -u origin develop-fix' "$REPO_DEV"  # 名前の一部に含むだけなら許す
+pr F09 none "$S_ON" 'git push origin feat/develop' "$REPO_DEV"     # / の直後に続く形は refs/heads/develop と区別せず落とす（main / master と同じ扱い）
+git -C "$REPO_DEV" checkout -q -b develop
+pr F10 none "$S_ON" 'git push -u origin feat/x' "$REPO_DEV"        # デフォルトブランチ（develop）をチェックアウト中
+echo "#   デフォルトブランチ名の正規表現の特殊文字（rel.1）はエスケープして比べる"
+REPO_DOT="$T/claude-prmode-test-repo-dot.$$"; rm -rf "$REPO_DOT"; git init -q -b feat/x "$REPO_DOT" 2>/dev/null || { git init -q "$REPO_DOT"; git -C "$REPO_DOT" checkout -q -b feat/x; }
+git -C "$REPO_DOT" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/rel.1
+pr F11 none "$S_ON" 'git push origin rel.1' "$REPO_DOT"
+pr F12 allow "$S_ON" 'git push origin relx1' "$REPO_DOT"
+rm -rf "$REPO_DEV" "$REPO_DOT"
+
+echo "# G. gh pr new（gh pr create の別名）は create と同じ扱い"
+pr G01 allow "$S_ON" 'gh pr new --fill'
+pr G02 allow "$S_ON" $'gh pr new --title "t" --body "$(cat <<\'EOF\'\nbody\nEOF\n)" --base main'
+pr G03 none "$S_ON" 'gh pr new -R other/repo --fill'
+pr G04 none "$S_ON" 'gh pr new --fill && gh pr merge 1'
+pr G05 none "$S_ON" 'gh pr newx 1'
+pre G10 deny "$S_OFF" 'gh pr new --fill'
+pre G11 deny "$S_OFF" 'gh pr -R owner/repo new --fill'
+pre G12 deny "$S_OFF" 'gh -R owner/repo pr new --fill'
+pre G13 deny "$S_OFF" 'bash -c "gh pr new --fill"'
+pre G14 deny "$S_OFF" 'gh pr list && gh pr new --fill'
+pre G15 none "$S_OFF" 'gh pr newx 1'
+pre G16 none "$S_OFF" 'echo "gh pr new"'
+
+echo "# H. /pr 中の PreToolUse: -R / --repo をサブコマンドの前に置いた gh pr create / new / edit は ask（分類器に自動承認させない）"
+pre H01 ask "$S_ON" 'gh pr -R other/repo create --fill'
+pre H02 ask "$S_ON" 'gh pr --repo other/repo edit 16 --title t'
+pre H03 ask "$S_ON" 'gh pr --repo=other/repo new --fill'
+pre H04 ask "$S_ON" 'gh pr -Rother/repo create --fill'
+pre H05 ask "$S_ON" 'gh -R other/repo pr create --fill'
+pre H06 ask "$S_ON" 'gh --repo other/repo pr edit 16 --title t'
+pre H07 ask "$S_ON" 'gh pr --title x -R other/repo create'       # -R より前に別のフラグを置いた形も拾う
+pre H08 ask "$S_ON" 'gh pr list && gh pr -R other/repo create --fill'
+pre H09 ask "$S_ON" 'bash -c "gh pr -R other/repo create --fill"'
+pre H0A ask "$S_ON" 'eval "gh --repo other/repo pr edit 16 --title t"'
+echo "#   /pr 中の PreToolUse は「対象コマンドで自動承認の条件を満たさないもの」をすべて ask にする（-R を後ろに置いた形・ラッパー経由も）。条件を満たすもの・読み取り・create / new / edit 以外は出さない"
+pre H10 ask "$S_ON" 'gh pr create -R other/repo --fill'
+pre H11 ask "$S_ON" 'gh pr edit 16 --repo other/repo --title t'
+pre H17 ask "$S_ON" 'command git push origin main'
+pre H18 ask "$S_ON" 'env X=1 git push origin develop'
+pre H19 ask "$S_ON" '/usr/bin/git push -f origin feat'
+pre H1A ask "$S_ON" '\git push origin main'
+pre H1B ask "$S_ON" 'X=1 git push origin main'
+pre H1C ask "$S_ON" 'exec git push origin main'
+pre H1D ask "$S_ON" 'command git commit --amend -m x'
+pre H1E ask "$S_ON" 'command gh pr create -R o/r --fill'
+pre H1F ask "$S_ON" 'gh pr --title t create --repo o/r --fill'
+pre H1G ask "$S_ON" 'gh --hostname github.com pr create -R o/r --fill'
+pre H1H ask "$S_ON" 'git commit --amend -m x'
+pre H1I ask "$S_ON" 'git push --force origin feat'
+pre H1J ask "$S_ON" 'git add . && git commit -m x'
+pre H1K ask "$S_ON" 'gh pr edit feature/x --title t'
+pre H1L ask "$S_ON" 'git "commit" -m x'
+pre H1M none "$S_ON" 'git commit -m "fix: x"'
+pre H1N none "$S_ON" 'git push -u origin feat/x'
+pre H1O none "$S_ON" 'gh pr edit 16 --title t'
+pre H1P none "$S_ON" 'git push --dry-run origin feat'
+pre H12 none "$S_ON" 'gh pr -R other/repo view 16'
+pre H13 none "$S_ON" 'gh -R other/repo pr list'
+pre H14 none "$S_ON" 'gh -R other/repo issue list'
+pre H15 none "$S_ON" 'gh pr create --fill'
+pre H16 none "$S_ON" 'echo "gh pr -R other/repo create"'
+echo "#   /pr 外では従来どおり deny"
+pre H20 deny "$S_OFF" 'gh pr -R other/repo create --fill'
+pre H21 deny "$S_OFF" 'gh pr --title x -R other/repo create'
+
+echo "# I. --help / -h（サブコマンド直後の唯一の引数）と git push --dry-run / -n（他のオプションは -u だけ）は何も書き換えないので /pr 外でも deny しない（単一コマンドなら PermissionRequest で allow）"
+pre I01 none "$S_OFF" 'git commit --help'
+pre I02 none "$S_OFF" 'git push --help'
+pre I03 none "$S_OFF" 'gh pr create --help'
+pre I04 none "$S_OFF" 'gh pr new -h'
+pre I05 none "$S_OFF" 'gh pr edit --help'
+pre I06 none "$S_OFF" 'git push --dry-run origin feat'
+pre I07 none "$S_OFF" 'git push -n origin feat'
+pre I08 none "$S_OFF" 'git push -un origin feat'
+pre I09 none "$S_OFF" 'git push origin feat --dry-run'
+pre I0A none "$S_OFF" 'git push --dry-run origin feat 2>&1 | tail -1'
+pre I0B none "$S_OFF" 'git -C . push --dry-run'
+pr I0C allow "$S_OFF" 'git push --dry-run origin feat'
+pr I0D allow "$S_OFF" 'git push -n -u origin feat 2>&1'
+pr I0E allow "$S_OFF" 'git commit --help'
+pr I0F allow "$S_OFF" 'gh pr create --help'
+pr I0G allow "$S_ON" 'git push -n origin feat'
+echo "#   区切りごとに見るので、dry-run / help の後ろに本物を繋いだ形は deny。commit の -n（--no-verify）は従来どおり"
+pre I10 deny "$S_OFF" 'git push --dry-run; git push'
+pre I11 deny "$S_OFF" 'git push --dry-run origin feat && git commit -m x'
+pre I12 deny "$S_OFF" 'git commit --help && git push'
+pre I13 deny "$S_OFF" 'git commit -n -m x'
+pre I14 deny "$S_OFF" 'git commit --dry-run -m x'       # commit の --dry-run は対象外のまま（commit 自体が走らないが単純化のため区別しない）
+pre I15 deny "$S_OFF" 'git commit -m "--help"'
+pre I16 deny "$S_OFF" 'git push "--dry-run" origin feat'
+pre I17 deny "$S_OFF" 'git push --dry origin feat'       # 接頭辞の省略形は拾わない（安全側）
+pre I18 deny "$S_OFF" 'bash -c "git push --dry-run"'
+pr I19 none "$S_OFF" 'git push --dry-run origin feat && rm -rf ~/x'   # 複合は allow しない（通常のダイアログ）
+pr I1A deny "$S_OFF" 'git push --dry-run --receive-pack=evil origin feat'   # -u 以外のオプションを伴う dry-run は harmless ではない
+pr I1B deny "$S_OFF" 'git commit -n -m x'
+echo "#   --help / --dry-run を他のオプションの値として消費させる形は本物の commit / push になるので deny（実 git で確認済みの形）"
+pre I20 deny "$S_OFF" 'git commit -m -h'
+pre I21 deny "$S_OFF" 'git commit -m --help'
+pre I22 deny "$S_OFF" 'git push --repo --dry-run origin feat'
+pre I23 deny "$S_OFF" 'git push --repo -h origin feat'
+pre I24 deny "$S_OFF" 'git push --repo -n origin feat'
+pre I25 deny "$S_OFF" 'git push -o --dry-run origin feat'
+pre I26 deny "$S_OFF" 'git push --help origin feat'           # --help に他の引数が続く形も厳格に deny
+pre I27 deny "$S_OFF" 'git commit --help -m x'
+pre I28 deny "$S_OFF" 'gh pr create --help --fill'
+pre I29 deny "$S_OFF" 'git push --dry-run --force origin feat'
+pre I2A deny "$S_OFF" 'git push -fn origin feat'
+pre I2B deny "$S_OFF" 'git push --dry-run --receive-pack=evil origin feat'
+pre I2C deny "$S_OFF" 'git push --dry-run --exec=evil origin feat'
+pr I2D deny "$S_OFF" 'git commit -m --help'
+pr I2E deny "$S_OFF" 'git push --repo --dry-run origin feat'
+pr I2F deny "$S_OFF" 'git push -o --dry-run origin feat'
+pr I2G none "$S_OFF" 'git push --dry-run "origin" feat'   # 引用符を含む形は allow しない（通常のダイアログ）
+pre I2H none "$S_OFF" 'git push -un origin feat'
+pre I2I none "$S_OFF" 'git push --set-upstream --dry-run origin feat'
+pr I2J allow "$S_OFF" 'git push --set-upstream --dry-run origin feat'
+pr I2K allow "$S_OFF" 'git push -h'
+pr I2L allow "$S_OFF" 'gh pr edit -h'
+
+echo "# J. 長オプションの一意な接頭辞（git が --amend / --force 等と解釈する）も自動承認しない"
+pr J01 none "$S_ON" 'git commit --amen -m x'
+pr J02 none "$S_ON" 'git commit -m x --am'
+pr J03 none "$S_ON" 'git commit --no-verif -m x'
+pr J04 none "$S_ON" 'git commit --no-v -m x'
+pr J05 none "$S_ON" $'git commit -m "$(cat <<\'EOF\'\nmsg\nEOF\n)" --amen'
+pr J06 none "$S_ON" 'git push --forc origin feat'
+pr J07 none "$S_ON" 'git push --f origin feat'
+pr J08 none "$S_ON" 'git push --force-w=feat origin feat'
+pr J09 none "$S_ON" 'git push --del origin feat'
+pr J0A none "$S_ON" 'git push --mirr origin'
+pr J0B none "$S_ON" 'git push --no-ver origin feat'
+pr J0C none "$S_ON" 'git push --ta origin feat'
+pr J0D none "$S_ON" 'git push --al origin'
+pr J0E none "$S_ON" 'git push --pru origin'
+pr J0F none "$S_ON" 'git push --force-if-inc origin feat'
+echo "#   接頭辞に当たらない長オプションは許す"
+pr J10 allow "$S_ON" 'git commit --all -m x'
+pr J11 allow "$S_ON" 'git commit --author=x -m y'
+pr J12 allow "$S_ON" 'git commit --no-edit -m x'
+pr J13 allow "$S_ON" 'git push --atomic origin feat'
+pr J14 allow "$S_ON" 'git push --follow-tags origin feat'
+pr J15 allow "$S_ON" 'git push --no-follow-tags origin feat'
+
+echo "# K. git -C <パス> commit / push: パスが cwd と同じリポジトリを指すリテラルなら -C 無しと同じに自動承認する"
+REPO_A="$T/claude-prmode-test-repo-a.$$"; rm -rf "$REPO_A"; git init -q -b feat/x "$REPO_A" 2>/dev/null || { git init -q "$REPO_A"; git -C "$REPO_A" checkout -q -b feat/x; }
+REPO_B="$T/claude-prmode-test-repo-b.$$"; rm -rf "$REPO_B"; git init -q -b feat/y "$REPO_B" 2>/dev/null || { git init -q "$REPO_B"; git -C "$REPO_B" checkout -q -b feat/y; }
+mkdir -p "$REPO_A/sub"
+pr K01 allow "$S_ON" "git -C $REPO_A commit -m x" "$REPO_A"
+pr K02 allow "$S_ON" "git -C . commit -m x" "$REPO_A"
+pr K03 allow "$S_ON" "git -C $REPO_A/sub commit -m x" "$REPO_A"
+pr K04 allow "$S_ON" "git -C .. commit -m x" "$REPO_A/sub"
+pr K05 allow "$S_ON" "git -C $REPO_A push -u origin feat/x" "$REPO_A"
+pr K06 allow "$S_ON" "git -C ./ push -u origin feat/x 2>&1" "$REPO_A"
+mkdir -p "$HOME/tilde-repo"; git init -q -b feat/x "$HOME/tilde-repo" 2>/dev/null || { git init -q "$HOME/tilde-repo"; git -C "$HOME/tilde-repo" checkout -q -b feat/x; }
+pr K07 allow "$S_ON" 'git -C ~/tilde-repo commit -m x' "$HOME/tilde-repo"   # ~/ は展開する（テスト中の HOME は一時ディレクトリ）
+echo "#   別リポジトリ・変数やコマンド置換・引用符・存在しないパス・cwd 無しは自動承認しない。-C 付きでも force / amend 等は落とす"
+pr K10 none "$S_ON" "git -C $REPO_B commit -m x" "$REPO_A"
+pr K11 none "$S_ON" "git -C $REPO_A commit -m x" "$REPO_B"
+pr K12 none "$S_ON" 'git -C $REPO commit -m x' "$REPO_A"
+pr K13 none "$S_ON" 'git -C $(pwd) commit -m x' "$REPO_A"
+pr K14 none "$S_ON" "git -C \"$REPO_A\" commit -m x" "$REPO_A"
+pr K15 none "$S_ON" "git -C $REPO_A/nonexistent commit -m x" "$REPO_A"
+pr K16 none "$S_ON" "git -C $REPO_A commit --amend" "$REPO_A"
+pr K17 none "$S_ON" "git -C $REPO_A push --force origin feat/x" "$REPO_A"
+pr K18 none "$S_ON" "git -C $REPO_A push origin main" "$REPO_A"
+pr K19 none "$S_ON" "git -C $REPO_A log" "$REPO_A"
+pr K1A none "$S_ON" "git -C $REPO_A -c user.name=x commit -m x" "$REPO_A"   # -C の直後が commit / push でない形は扱わない
+pr K1B none "$S_ON" "git -C ~user/repo commit -m x" "$REPO_A"
+pr K1C none "$S_ON" "git -C $REPO_A commit -m x && rm -rf ~/x" "$REPO_A"
+pre K20 deny "$S_OFF" "git -C $REPO_A commit -m x"
+rm -rf "$REPO_A" "$REPO_B"
+
+echo "# N. * を含む refspec・単独の :・--receive-pack / --exec / --repo は自動承認しない（実 git で origin/main が更新される形）"
+pr N01 none "$S_ON" 'git push origin :'
+pr N02 none "$S_ON" 'git push origin refs/heads/*:refs/heads/*'
+pr N03 none "$S_ON" 'git push origin "refs/heads/*:refs/heads/*"'
+pr N04 none "$S_ON" 'git push origin refs/heads/*'
+pr N05 none "$S_ON" 'git push origin HEAD:refs/heads/mai*'
+pr N06 none "$S_ON" 'git push origin "HEAD:refs/heads/mai*"'
+pr N07 none "$S_ON" 'git push origin ":feat/x"'
+pr N08 none "$S_ON" 'git push origin "+feat/x"'
+pr N09 none "$S_ON" 'git push origin feat/*'
+pr N0A none "$S_ON" 'git push --receive-pack=evil origin feat'
+pr N0B none "$S_ON" 'git push --receive-pack evil origin feat'
+pr N0C none "$S_ON" 'git push --exec=evil origin feat'
+pr N0D none "$S_ON" 'git push --repo=https://example.com/x.git feat'
+pr N0E none "$S_ON" 'git push --receive-p=evil origin feat'
+pr N0F none "$S_ON" 'git push --rep x feat'
+pr N10 allow "$S_ON" 'git push origin "HEAD:feat/x"'
+pr N11 allow "$S_ON" 'git push origin HEAD:refs/heads/feat/x'
+
+echo "# O. コマンド語を引用符で囲む・割る形も /pr 外では deny（引用符の中のリテラルは引き続き deny しない）"
+pre O01 deny "$S_OFF" 'git "commit" -m x'
+pre O02 deny "$S_OFF" "git 'commit' -m x"
+pre O03 deny "$S_OFF" 'git c"ommit" -m x'
+pre O04 deny "$S_OFF" "git \$'commit' -m x"
+pre O05 deny "$S_OFF" 'git "push" origin feat'
+pre O06 deny "$S_OFF" 'gh "pr" create --fill'
+pre O07 deny "$S_OFF" 'gh pr "create" --fill'
+pre O08 deny "$S_OFF" '"git" commit -m x'
+pre O09 deny "$S_OFF" "'git' push origin feat"
+pre O0A deny "$S_OFF" 'git status && git "commit" -m x'
+pre O0B deny "$S_OFF" 'gh pr "edit" 16 --title x'
+pre O0C deny "$S_OFF" 'gh pr "new" --fill'
+pre O0D deny "$S_OFF" 'git "-C" . commit -m x'
+pr O0E deny "$S_OFF" 'git "commit" -m x'
+echo "#   誤検知しない: 引用符の中のリテラル・空白を含む引用"
+pre O10 none "$S_OFF" 'echo "git commit"'
+pre O11 none "$S_OFF" "echo 'git push origin main'"
+pre O12 none "$S_OFF" 'git log --grep "git commit" --oneline'
+pre O13 none "$S_OFF" 'gh pr comment 1 --body "gh pr create 済み"'
+pre O14 none "$S_OFF" 'git commit-tree HEAD^{tree} -m "git push"'
+pre O16 none "$S_OFF" 'grep -rn "git \"commit\"" docs/'
+pre O17 none "$S_OFF" 'git "status"'
+pre O18 none "$S_OFF" 'git "push" --help'     # 引用して割っても harmless 形は deny しない
+pre O19 none "$S_OFF" 'gh "pr" view 16'
+
+echo "# P. gh api の短フラグ値連結（-ftitle=x）と末尾 / のパスも書き込みとみなす"
+pre P01 deny "$S_OFF" 'gh api repos/o/r/pulls -ftitle=x -fhead=f -fbase=main'
+pre P02 deny "$S_OFF" 'gh api repos/o/r/pulls -Ftitle=x'
+pre P03 deny "$S_OFF" 'gh api repos/o/r/pulls/16/ -f title=x'
+pre P04 deny "$S_OFF" 'gh api repos/o/r/pulls/ -ftitle=x'
+pre P05 deny "$S_OFF" 'gh api -X PATCH repos/o/r/pulls/16/'
+pre P06 none "$S_OFF" 'gh api repos/o/r/pulls/16/'
+pre P07 none "$S_OFF" 'gh api repos/o/r/pulls/16/comments/ -f body=x'
+pre P08 none "$S_OFF" 'gh api repos/o/r/pulls -X GET -fstate=open'
+
+echo "# L. サブエージェント（入力に agent_id がある）からの commit / push は /pr 中でも deny（agent_id が PermissionRequest に入るか未確認のため PreToolUse で止める）"
+# agent_id 付きの入力を送る: label expected event session cmd
+agent_case() {
+  local out
+  out=$(jq -cn --arg e "$3" --arg s "$4" --arg c "$5" '{hook_event_name:$e, session_id:$s, cwd:"/tmp", agent_id:"agent-1", agent_type:"general-purpose", tool_name:"Bash", tool_input:{command:$c}}' | bash "$HOOK" 2>/dev/null)
+  report "$1" "$2" "$(decision_of "$out")" "$5"
+}
+agent_case L01 none PermissionRequest "$S_ON" 'git commit -m "fix: x"'
+agent_case L02 none PermissionRequest "$S_ON" 'git push -u origin feat/x'
+agent_case L03 none PermissionRequest "$S_ON" 'gh pr create --fill'
+agent_case L04 deny PreToolUse "$S_ON" 'git commit -m x'
+agent_case L05 deny PreToolUse "$S_ON" 'git push -u origin feat/x'
+agent_case L06 deny PreToolUse "$S_ON" 'gh pr edit 16 --title t'
+agent_case L07 deny PreToolUse "$S_ON" 'git -C . commit -m x'
+agent_case L0E deny PreToolUse "$S_ON" 'command git push origin feat'
+agent_case L08 none PreToolUse "$S_ON" 'git status'
+agent_case L09 none PreToolUse "$S_ON" 'git push --dry-run origin feat'
+agent_case L0A allow PermissionRequest "$S_ON" 'git push --dry-run origin feat'   # 何も書き換えない形はサブエージェントでも allow
+agent_case L0B deny PreToolUse "$S_OFF" 'git commit -m x'
+agent_case L0C deny PermissionRequest "$S_OFF" 'git commit -m x'
+# PreToolUse の deny の理由文は「サブエージェントからは実行できない・メインで行う」旨を含む
+out=$(jq -cn --arg s "$S_ON" '{hook_event_name:"PreToolUse", session_id:$s, cwd:"/tmp", agent_id:"agent-1", tool_name:"Bash", tool_input:{command:"git commit -m x"}}' | bash "$HOOK" 2>/dev/null)
+case "$out" in *'サブエージェントからは実行できません'*'メインセッション'*) r=ok ;; *) r="理由文が一致しない: $out" ;; esac
+report L0D-deny-reason-mentions-subagent ok "$r" ""
 
 echo "# C. /pr 外の拒否（PreToolUse deny）"
 pre C01 deny "$S_OFF" 'git commit -m x'
@@ -271,6 +537,7 @@ pre C2h deny "$S_OFF" 'gh api repos/o/r/pulls; gh api -X POST repos/o/r/pulls -f
 pre C2i deny "$S_OFF" 'echo $(gh api -X POST repos/o/r/pulls -f title=x)'
 pre C2j deny "$S_OFF" $'gh api repos/o/r/pulls --input - <<EOF\n{"title":"x"}\nEOF'
 pre C2k deny "$S_OFF" 'gh api --input body.json "repos/o/r/pulls"'
+pre C2l deny "$S_OFF" 'gh api -X DELETE repos/o/r/pulls/16'   # GET 以外のメソッドはすべて書き込みとみなす
 # deny の理由文は PR の更新も対象に含むことが分かる文言になっている
 out=$(run_hook "$HOOK" PreToolUse "$S_OFF" 'gh pr edit 16 --title x'); case "$out" in *'PR の作成・更新'*'/pr'*) r=ok ;; *) r="理由文が一致しない: $out" ;; esac
 report C2T-deny-reason-mentions-edit ok "$r" ""

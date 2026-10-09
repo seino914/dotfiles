@@ -1,6 +1,6 @@
 ---
 name: pr
-description: 現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（既に open な PR があれば更新する）。ユーザーが /pr と明示的に指示したときのみ使用する。git commit / git push / gh pr create / gh pr edit はこのスキルの実行中に限り許可される。
+description: 現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（既に open な PR があれば更新する）。ユーザーが /pr と明示的に指示したときのみ使用する。git commit / git push / gh pr create（別名 gh pr new）/ gh pr edit はこのスキルの実行中に限り許可される。
 disable-model-invocation: true
 allowed-tools:
   - Bash(git status:*)
@@ -26,12 +26,12 @@ allowed-tools:
 
 ## 前提（機構上の制約）
 
-- このスキルはユーザーの `/pr` 指示によってのみ実行する。それ以外の場面で git commit / git push / gh pr create / gh pr edit を実行してはならない（`hooks/pr-mode.sh` が実行前に拒否する）
-- `/pr` を送信したターンの間だけ、`hooks/pr-mode.sh` が git commit / git push / gh pr create / gh pr edit の確認ダイアログを自動承認する
+- このスキルはユーザーの `/pr` 指示によってのみ実行する。それ以外の場面で git commit / git push / gh pr create（別名 `gh pr new`）/ gh pr edit を実行してはならない（`hooks/pr-mode.sh` が実行前に拒否する）
+- `/pr` を送信したターンの間だけ、`hooks/pr-mode.sh` が git commit / git push / gh pr create / gh pr new / gh pr edit の確認ダイアログを自動承認する
 - **自動承認は単一コマンドに限る**。`git commit` / `git push` / `gh pr create` / `gh pr edit` は必ず **1つずつ独立した Bash 呼び出しで実行**し、`&&` `;` `|` や改行で他のコマンド（`git add` や `git checkout -b` を含む）と繋がない。複合コマンド・コマンド置換（`$( )`）・リダイレクトはフックが自動承認せず確認ダイアログに落ちる。例外は本文を渡す `"$(cat <<'EOF' … EOF\n)"` の定型だけ
 - **ターンを終えない**。ターンが終わると Stop フックがフラグを消し、次のターンのコミット・push は拒否される。途中でユーザーに確認が必要なときは **AskUserQuestion ツール**で質問する。やむを得ずテキスト応答でターンを終える場合は「回答後にもう一度 /pr を実行してください」と必ず添える
-- git commit / git push / gh pr create / gh pr edit は**メインセッションが直接実行**し、サブエージェントへ委譲しない（フラグはセッション単位なので別セッション扱いで拒否される）
-- `--no-verify` / `--amend` / force push / `--delete` / デフォルトブランチへの push はフックが自動承認しない。使わない
+- git commit / git push / gh pr create / gh pr edit は**メインセッションが直接実行**し、サブエージェントへ委譲しない（サブエージェントの呼び出しはフック入力の `agent_id` で見分けられ、`/pr` 中でも拒否される）
+- `--no-verify` / `--amend` / force push / `--delete` / デフォルトブランチへの push（とそれらの省略形 `--amen` / `--forc` 等）、`*` を含む refspec、`--receive-pack` / `--exec` / `--repo`、`-R` / `--repo` での別リポジトリ宛、`gh pr edit` の番号以外の位置引数（URL / `OWNER/REPO#番号` / ブランチ名）、`command git` / `env X=1 git` / `/usr/bin/git` のようなラッパー経由はフックが自動承認しない（確認ダイアログになる）。使わない
 
 ## 手順
 
@@ -54,7 +54,7 @@ allowed-tools:
 
 ### 2. ブランチ準備
 
-- デフォルトブランチ（main / master）上にいる場合は、変更内容を表す新しいブランチを作成して移動する（例: `feat/xxx`、`fix/xxx`、`docs/xxx`、`chore/xxx`）
+- 手順 1 で調べたデフォルトブランチ上にいる場合は、変更内容を表す新しいブランチを作成して移動する（例: `feat/xxx`、`fix/xxx`、`docs/xxx`、`chore/xxx`）
 - 既に作業ブランチ上ならそのまま使う
 
 ### 3. コミット

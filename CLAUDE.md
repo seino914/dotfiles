@@ -62,12 +62,12 @@ bash .claude/tests/run.sh
 
 ## /pr フローの四層構造
 
-git commit / push / PR作成・更新（`gh pr create` / `gh pr edit`）の制御は四層で成り立ち、**一層だけ変更すると整合が壊れる**（対象コマンドを足すときは四層すべてに足す）：
+git commit / push / PR作成・更新（`gh pr create`（別名 `gh pr new`）/ `gh pr edit`）の制御は四層で成り立ち、**一層だけ変更すると整合が壊れる**（対象コマンドを足すときは四層すべてに足す）：
 
 1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にする
 2. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
-3. `.claude/settings.json` の `permissions.ask` — 対象コマンドを常に確認対象にする
-4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ確認を自動承認し、それ以外は拒否する（`gh pr merge` は常に ask）。Stop でフラグを消すが、`verify-gate.sh` が同じ Stop でターンを続行させるときは残す（両フックの判定条件を揃えて変更する）
+3. `.claude/settings.json` の `permissions.ask` — 対象コマンド（`git commit` / `git push` / `gh pr create` / `gh pr new` / `gh pr edit` / `gh pr merge`）を常に確認対象にする。前方一致で拾えない形（`gh pr -R o/r create` / `command git push` / `env X=1 git push` / `/usr/bin/git push` 等）は層4の PreToolUse が `/pr` 中は ask・`/pr` 外は deny にする
+4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ確認を自動承認し、それ以外は拒否する（`/pr` 中でも、サブエージェント＝フック入力に `agent_id` があるものは deny、自動承認の条件を満たさないものは ask。`gh pr merge` は常に ask。サブコマンド直後に `--help` だけを置いた形と `-u` 以外のオプションを伴わない `git push --dry-run` は何も書き換えないので拒否せず自動承認する）。Stop でフラグを消すが、`verify-gate.sh` が同じ Stop でターンを続行させるときは残す（両フックの判定条件を揃えて変更する）
 
 層4の `UserPromptSubmit` は、`/pr` の展開本文かどうかを `skills/pr/SKILL.md` の最初の `# ` 見出しで見分ける（見出しは実行時に読むので改名してよいが、**H1 を無くすと判定できなくなる**）。
 
