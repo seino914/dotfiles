@@ -65,6 +65,8 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `permissions.defaultMode`：`auto`（v2.1.283 以降は未設定でも auto 起動だが、方針として明示している。VSCode 拡張は `claudeCode.initialPermissionMode` 未設定なら「最後に選んだモード → この値」の順で起動モードを決める。`initialPermissionMode` は `auto` を受け付けないので設定しないこと）。内容を指定した `permissions.ask` ルール（git commit 等）とフックの ask / deny は auto mode でも効くので、/pr フローの四層構造は変わらない
 - `autoMode.environment`：auto mode の分類器に環境を自然文で伝える。`"$defaults"` に加え、github.com/seino914/* を信頼できる push・PR 作成先、`dev-roots` の 3 ルートを作業ルート、Nix による宣言管理と `~/.claude` のリンク構成、を渡している。**`"$defaults"` を外すと組み込みの既定が丸ごと置き換わるので外さない**
 - Orca のフックと `statusLine`：外部のエージェント管理アプリ Orca（`~/.orca/agent-hooks/`）が書き込んだもので、12 イベント（`UserPromptSubmit` / `PreToolUse`(*) / `PermissionRequest`(*) / `PostToolUse`(*) / `Stop` / `SessionStart` / `StopFailure` / `SubagentStart` / `SubagentStop` / `TeammateIdle` / `PostToolUseFailure` / `PostCompact`）の `hooks` と `statusLine` に入っている（コマンドに `orca` を含むエントリ）。Orca 内で起動したときだけ Orca アプリへイベントを送り、Orca 外では何もせず `{}` を返して終わる（権限判定には関与しない）。Orca が書き換えるので手で編集しない。Orca が settings.json を書き換える前に作る `settings.json.bak` は `.gitignore` と `setup.sh` で除外してある
+- `deniedMcpServers`：未使用の claude.ai コネクタ（`claude.ai Gmail` / `claude.ai Google Calendar` / `claude.ai Google Drive` / `claude.ai Claude Docs`）を読み込まない（毎セッションのコンテキスト節約。過去の会話記録で使用 0 回）。使いたくなったらこの配列から外す
+- Playwright MCP：ユーザースコープ（`~/.claude.json`、`npx -y @playwright/mcp@latest`）で全プロジェクトに有効。dotfiles リポジトリでは使わないので、gitignore 済みの `.claude/settings.local.json`（`setup.sh` の配布対象外＝dotfiles プロジェクトだけに効くローカル設定）の `deniedMcpServers` で止めている
 - `tui`：`fullscreen`
 - `agentPushNotifEnabled`：`true`（Remote Control接続時にClaudeの判断でスマホへプッシュ通知する公式機能。claude-notifyとは別系統）
 
