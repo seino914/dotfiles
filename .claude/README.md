@@ -13,6 +13,8 @@
 | `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は dotfiles 同梱の `claude-notify/send-push.mjs`、受信側PWAは claude-notify-mobile リポジトリ） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成を自動許可し、それ以外は実行前に拒否するフック |
 | `hooks/guard-destructive.sh` | 回復不能な操作（ルート・ホーム直下の削除、破壊的git操作等）を機構的に止めるフック |
+| `hooks/guard-secrets.sh` | Write / Edit / NotebookEdit が書き込む内容に既知の秘密情報パターンがあり、書き込み先が git に無視されていない作業ツリー内のファイルなら、書き込み前に確認（ask）にするフック |
+| `hooks/verify-gate.sh` | dotfiles の検証対象ファイルを編集したセッションで、`bash .claude/tests/run.sh` / `nix eval` が成功するまで Stop で続行を促すフック |
 | `hooks/validate-claude-config.sh` | `~/.claude` 配下の設定ファイル編集直後にJSON構文・シェル構文・frontmatterを検証するフック |
 | `hooks/lib/strip-shell.awk` | シェルコマンド文字列から引用符の中身とHEREDOC本文を除去する共通ライブラリ（pr-mode.sh・guard-destructive.shが利用） |
 | `dev-roots` | Claude Code が確認なしで削除・移動できる作業ルートの**唯一の定義**（1行1パス、`~/` 始まり、`#` から行末はコメント、前後の空白と末尾の `/` は無視、`~/` 始まり以外の行は読まれない）。`hooks/guard-destructive.sh`・`nix/home.nix`（`devDirs`）・`tests/test-guard-destructive.sh` が同じ読み方で読む。変更したら `git add` すること（flakeはgit追跡ファイルしか読まない） |
@@ -23,7 +25,7 @@
 | `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：新規プロジェクトの開発環境をNix devShell + direnvでセットアップ。`model: sonnet` でそのターンのみSonnetに切り替える |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（gitが管理するファイルのみ）を `~/.claude` へシンボリックリンクするスクリプト |
-| `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・validate-claude-config.sh のテーブル駆動テストと一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
+| `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・guard-secrets.sh・verify-gate.sh・validate-claude-config.sh のテーブル駆動テストと一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
 
 ## セットアップ（反映方法）
 
@@ -54,7 +56,8 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `permissions.deny`：`~/.claude/claude-notify.json`・`~/.claude/history.jsonl` に加え、SSH秘密鍵・AWS認証情報・`gh` の hosts.yml・Docker設定・`.netrc`・GPG鍵・kubeconfig・`.npmrc`・主要な `.env` 変種（`.env.example` は除く。一覧は settings.json）などの秘密ファイルの読み取りと `sudo` の実行を禁止（詳細は settings.json）
 - `permissions.ask`：`git commit` / `git push` / `gh pr create` / `gh pr merge` に加え、`brew install` 系・`npm install -g` 系・`pip install --user`・`pipx`・`uv tool install`・`cargo` / `gem` / `go install`・`nix profile` / `nix-env`・`darwin-rebuild`・`home-manager` など、プロジェクト外へ恒久的な変更を及ぼすコマンドを実行前に必ず確認（詳細は settings.json）
 - `env.CLAUDE_CODE_SUBAGENT_MODEL`：`opus`（サブエージェントの既定モデル。定型作業は `sonnet` / `haiku` を明示して落とす。組み込みの Explore は `agents/Explore.md` で Haiku に固定、Plan はメイン（Opus）を継承する）
-- `hooks`：`UserPromptExpansion` / `UserPromptSubmit` / `PreToolUse`(Bash) / `PermissionRequest`(Bash) / `Stop` で `hooks/pr-mode.sh`、`PreToolUse`(Bash) で `hooks/guard-destructive.sh`、`PostToolUse`(Edit|Write|NotebookEdit) で `hooks/validate-claude-config.sh`、`Stop` / `Notification`(matcher: `permission_prompt`) で `hooks/notify.sh`
+- `hooks`：`UserPromptExpansion` / `UserPromptSubmit` / `PreToolUse`(Bash) / `PermissionRequest`(Bash) / `Stop` で `hooks/pr-mode.sh`、`PreToolUse`(Bash) で `hooks/guard-destructive.sh`、`PreToolUse`(Write|Edit|NotebookEdit) で `hooks/guard-secrets.sh`、`PostToolUse`(Edit|Write|NotebookEdit) で `hooks/validate-claude-config.sh`、`PostToolUse`(Edit|Write|NotebookEdit)・`PostToolUse`(Bash)・`Stop` で `hooks/verify-gate.sh`、`Stop` / `Notification`(matcher: `permission_prompt`) で `hooks/notify.sh`
+  - 安全装置のフック（`pr-mode.sh`・`guard-destructive.sh`・`guard-secrets.sh` の `PreToolUse`）には `onFailure: "block"`（v2.1.295。現時点では CHANGELOG のみに記載）を付けている。フックが起動できない・タイムアウト・想定外の exit コードのときに操作をブロックする設定で、フックが壊れても黙って素通りにならない（実機で、exit 3・スクリプト不在・タイムアウトはブロック、exit 0 は通過、`onFailure` 無しの exit 3 は通過、を確認済み）。タイムアウトは `pr-mode.sh`・`guard-destructive.sh` が `timeout: 10`、`guard-secrets.sh` が `timeout: 30`。代償として、フックのファイルが消える・壊れると全 Bash（`guard-secrets.sh` は全 Write / Edit / NotebookEdit）が止まる。そのときの復旧は「緊急時の復旧（セーフモード）」を参照
 - `model`：`opus`（エイリアス。現在は Opus 5.5 に解決され、新しい Opus が出れば自動で追従する。Fable は Opus で解けない・難しい作業に限り、`model: "fable"` のサブエージェントへ切り出すか、セッション単位で `/model` から選ぶ運用。方針は `CLAUDE.md` のモデル運用ポリシー）
 - `modelSettings`：モデルごとの `effortLevel`（`claude-opus-5-5` / `claude-fable-5-1` / `claude-sonnet-5-5` / `claude-haiku-5-5` をすべて `high` にしている）。v2.1.251 以降 `/effort` はモデル別に `modelSettings` へ保存され、Opus 5.5 以降のモデルはトップレベルの `effortLevel` を無視して既定の medium で動くため、モデルごとに持つ必要がある。**新しいモデル（`opus` の解決先が変わったとき等）が出たら、`/effort high` を一度実行するか `modelSettings` に追記しないと medium で動く**
 - `language`：`japanese`
@@ -124,6 +127,58 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 
 なお `/pr` 外での `git commit` / `push` / `gh pr create` は、`eval` / `sh -c` 経由でも **deny のまま**（guard の「解釈不能は ask」の例外）。`pr-mode.sh` の意図は「Claude が試みること自体を抑止する」ことであり、ask にすると人の承認で通ってしまうため。
 
+## 秘密情報の書き込みガード
+
+`permissions.deny` は秘密ファイルを「読ませない」だけで、Claude がトークンや秘密鍵をファイルへ書き込み、それが git にコミットされて公開リポジトリへ漏れる経路は塞いでいない。`hooks/guard-secrets.sh`（`PreToolUse`/Write・Edit・NotebookEdit。`timeout: 30`・`onFailure: "block"`）がそれを書き込みの直前に止める。**契約は一文**（フック冒頭のコメントと同じ）：
+
+> 書き込む内容に既知の秘密情報パターンがあり、書き込み先が git の作業ツリー内で、かつ git に無視されていないファイルなら ask。明らかなプレースホルダは除く。
+
+- 書き込み先は、実在する最も近い親ディレクトリを物理パスに解決して判定する（`~/.claude` のようなリンク経由も実体で見る）。作業ツリー外・`.gitignore` 対象・git が無い・判定不能なら何もしない
+- 対象パターン（誤検知を抑えるため長さ・形は厳しめ。トークン類は語中の `sk-` を拾わない）：秘密鍵ブロックのヘッダ（RSA / EC / OPENSSH / ENCRYPTED / PGP など）、GitHub（`gh?_` / `github_pat_`）、Anthropic（`sk-ant-`）、OpenAI（`sk-` / `sk-proj-`）、AWS アクセスキー ID（`AKIA` / `ASIA`）、Slack（`xox?-`）、Google API キー（`AIza`）、Stripe 本番（`sk_live_` / `rk_live_`）、npm（`npm_`）
+- `EXAMPLE` / `dummy` / `placeholder` / `your_` / `xxxx` / `****` / `<` / `...` を含むものと、同じ文字が 8 回以上連続するものはプレースホルダとして除く（全部除外されたら何もしない）
+- ask の理由文は「何をしようとしているか」＋「なぜ確認が要るか」で、一致した秘密そのものは出さず先頭数文字＋「…」に伏せる。deny ではなく ask なのは、テストの fixture やドキュメントの例など正当な書き込みもありうるため。auto mode でもフックの ask は必ずダイアログになる
+- jq・git が無い・入力が壊れているときは何もせず exit 0（通常の permission 判定に委ねる）
+
+### 既知の抜け道
+
+網羅は追わず、`CLAUDE.md` の指示・`permissions.deny`・GitHub の secret scanning と併用する多層防御の一層：
+
+- **Bash 経由の書き込み**（`echo > file` / `cat <<EOF > file` / `sed -i` など）。フックが見るのは Write / Edit / NotebookEdit だけ
+- パターンに無い種類の秘密（生のパスワード・JWT・汎用の hex 文字列など）と、行をまたいで分断されたトークン
+- `PUBLIC KEY` や `CERTIFICATE`（秘密ではない）
+
+## 検証ゲート
+
+リポジトリ直下の `CLAUDE.md` は「`.claude/` 配下を変えたら `bash .claude/tests/run.sh`、`flake.nix` / `nix/` を変えたら `nix eval`」と定めているが、指示は守られないことがある。`hooks/verify-gate.sh` は検証の実行を Stop フックで機構的に強制する（公式ベストプラクティスの「検証を Stop フックで決定的に強制する」に当たる）。**契約は一文**（フック冒頭のコメントと同じ）：
+
+> dotfiles の検証対象ファイルを Edit / Write / NotebookEdit で変更したセッションでは、対応する検証コマンドが成功するまでターンを終えさせない（1 回だけ続行を促し、それでも未検証なら終了を許してユーザーに警告を出す）。
+
+1 本のスクリプトを `hook_event_name` / `tool_name` で分岐する（`pr-mode.sh` と同じ流儀）：
+
+- `PostToolUse`(Edit|Write|NotebookEdit)：編集先が dotfiles ルート内なら分類して、状態ファイルにカテゴリを記録する。`run.sh` カテゴリは `.claude/hooks/**`・`.claude/tests/**`・`.claude/settings.json`・`.claude/setup.sh`・`.claude/skills/**`・`.claude/agents/**`・`bootstrap.sh`、`nix eval` カテゴリは `flake.nix`・`flake.lock`・`nix/**`、両方を要求するのは `.claude/dev-roots`（`nix/home.nix` も `builtins.readFile` で読むため）。README・`CLAUDE.md`・docs などは対象外
+- `PostToolUse`(Bash)：成功した Bash のうち、コマンドに `.claude/tests/run.sh` を含み出力に「すべて通過」だけの行があれば `run.sh` を、コマンドに `darwinConfigurations.mac.system.drvPath` を含み出力に `/nix/store/…drv` があれば `nix eval` を解除する。各テストの summary 行「N 件すべて通過」は失敗時にも出るので、`run.sh` の最終行と同じ「行全体がすべて通過」だけを成功とみなす。`HOOKS_DIR=` を付けた実行は別の場所のフックを検査しているので数えない
+- `Stop`：カテゴリが残っていれば、`stop_hook_active` が false のとき `additionalContext` で未検証の内容・実行すべきコマンドを返して 1 回だけ続行させる。true のときはこれ以上止めず（無限ループ防止）、`systemMessage` で検証未実行のまま終了した旨をユーザーに警告する（状態は残すので次のターンでまた促す）
+
+状態は `${TMPDIR:-/tmp}/claude-verify-gate-<session_id>` に 1 行 1 カテゴリで持つ。どのイベントでも exit 0 固定で、`session_id` が無い・jq が無い・入力が壊れているときは何もしない。
+
+既知の制約（フック冒頭のコメントにも記載）：
+
+- **Bash（`sed -i`・ヒアドキュメント等）による編集は検出しない**。サブエージェントの編集も同じ `session_id` で届く前提で区別しない（サブエージェントが編集しメインが検証してもよい）
+- 検証コマンドの判定はコマンド文字列と出力の部分一致なので、別のチェックアウトの `run.sh` を実行しても解除される。並列のツール呼び出しで状態ファイルが競合すると、まれに記録が欠けうる（ロックはしない）
+- `Stop` では `notify.sh` も並行して動くため、続行を促した場合も「完了」通知が先に飛ぶことがある
+
+## 公式プラグイン security-guidance（導入手順と設定方法）
+
+`security-guidance@claude-plugins-official` は**未導入**。Claude からの導入は auto mode の分類器に自己改変として止められたため、ユーザーが自分で導入する。
+
+1. Claude Code で `/plugin install security-guidance@claude-plugins-official` を**ユーザースコープ**で実行する
+2. 導入されると `settings.json` の `enabledPlugins` に記録されるので、`git diff` で確認してコミットする
+
+導入後に環境変数で調整できる（`settings.json` の `env` などに置く）：
+
+- レビュー層のモデル：`SECURITY_REVIEW_MODEL`（ターン末レビュー）と `SG_AGENTIC_MODEL`（コミット時レビュー）。既定は Opus 4.7
+- 層ごとの無効化：`ENABLE_PATTERN_RULES=0` / `ENABLE_STOP_REVIEW=0` / `ENABLE_COMMIT_REVIEW=0`
+
 ## 設定ファイルの自動検証
 
 `hooks/validate-claude-config.sh`（`PostToolUse`/Edit・Write・NotebookEdit）は、`~/.claude` または dotfiles の `.claude` 配下を編集した直後に構文を検証する：
@@ -141,7 +196,11 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 bash .claude/tests/run.sh
 ```
 
-settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、および3フック（pr-mode / guard-destructive / validate-claude-config）のテーブル駆動テスト**計 533 件**（guard 345 / pr-mode 172 / validate 16。各テストの summary 行がちょうど1行あることも確認する）を数秒で実行する。guard のテストには、許可ルート内の通常の削除が確認なしで通ることを固定する不変条件セクション（IV01〜IV13）、`dev-roots` の各ルートを検査する DR1〜DR3、`dev-roots` の文法（行内コメント・空白・`~/` 以外の行）を作業コピーで検査する DC1〜DC4、ask / deny の理由文が「何をするコマンドか」で始まることを検査する X01〜X19 が含まれる。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。test-pr-mode.sh は `HOME` を一時ディレクトリに向けて実行するので、壊れた入力や `session_id` 欠落のケースを流してもフックの本物のログ `~/.claude/pr-mode.log` には書き込まない（run.sh がテスト前後の行数で検査する。E07 はそのログの文言が文字化けしていないことも見る）。`hooks/pr-mode.sh`・`hooks/guard-destructive.sh`・`hooks/validate-claude-config.sh` を変更したときは必ず実行して通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
+settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、`settings.json` のフック・`statusLine` の登録元検査、および5フック（pr-mode / guard-destructive / guard-secrets / verify-gate / validate-claude-config）のテーブル駆動テスト**計 757 件**（guard-destructive 345 / guard-secrets 115 / pr-mode 172 / validate 16 / verify-gate 109。各テストの summary 行がちょうど1行あることも確認する）を1分ほどで実行する。登録元検査は、フックのコマンドが `bash $HOME/.claude/hooks/<実在するスクリプト>.sh` であることと、`run.sh` 内の許可リスト（`ALLOWED_EXTERNAL_HOOKS` / `ALLOWED_EXTERNAL_STATUSLINE`）に載った Orca だけを例外とすることを確認する（外部アプリが settings.json へ黙って書き込んだフックを検出するため。`validate-claude-config.sh` は Claude 自身の編集しか見ない）。新しい外部ツールを採用するときは、中身を確認してから許可リストに足す。guard のテストには、許可ルート内の通常の削除が確認なしで通ることを固定する不変条件セクション（IV01〜IV13）、`dev-roots` の各ルートを検査する DR1〜DR3、`dev-roots` の文法（行内コメント・空白・`~/` 以外の行）を作業コピーで検査する DC1〜DC4、ask / deny の理由文が「何をするコマンドか」で始まることを検査する X01〜X19 が含まれる。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。test-pr-mode.sh は `HOME` を一時ディレクトリに向けて実行するので、壊れた入力や `session_id` 欠落のケースを流してもフックの本物のログ `~/.claude/pr-mode.log` には書き込まない（run.sh がテスト前後の行数で検査する。E07 はそのログの文言が文字化けしていないことも見る）。`hooks/pr-mode.sh`・`hooks/guard-destructive.sh`・`hooks/guard-secrets.sh`・`hooks/verify-gate.sh`・`hooks/validate-claude-config.sh` を変更したときは必ず実行して通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
+
+## 緊急時の復旧（セーフモード）
+
+`~/.claude` は編集が即反映されるうえ、安全装置のフックには `onFailure: "block"` を付けているため、フックや `settings.json` を壊すと Claude Code がまともに動かなくなりうる（フックが起動できないと全 Bash や全 Write / Edit が止まる）。そのときは `claude --safe-mode`（または環境変数 `CLAUDE_CODE_SAFE_MODE=1`）で起動する。CLAUDE.md・スキル・プラグイン・フック・MCP・カスタムエージェント・`statusLine` などを無効にして起動するので、その状態で壊れたファイルを直し、`bash .claude/tests/run.sh` で通ることを確認してから通常起動に戻す。
 
 ## iPhoneプッシュ通知（claude-notify）
 
