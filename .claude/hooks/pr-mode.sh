@@ -51,13 +51,16 @@
 #   拒否判定側は逆に、除去に失敗したら生文字列で判定する（fail-open にしない）
 #
 # 拒否判定（フラグ無し）は、除去後の文字列に対する正規表現で行う。
-# git [-C dir] [-c k=v] commit|push、gh pr create|edit、/usr/bin/git、\git（エイリアス回避）、command git、
+# git [-C dir] [-c k=v] commit|push、gh [-R o/r] pr [-R o/r | --repo o/r | --repo=o/r] create|edit（gh pr グループ共通のフラグは
+# pr の前後どちらにも置ける）、/usr/bin/git、\git（エイリアス回避）、command git、
 # env X=1 git、"git push;" / "(git push)" のような区切り直前の形を捕捉し、引用符の中のリテラル
 # （git log --grep "git commit" 等）は拒否しない。gh api は /pulls（作成）と /pulls/<番号>（更新）への書き込み
 # （POST/PUT/PATCH / -f / --input。/pulls/N/comments 等サブリソースへの書き込みは対象外）と GraphQL の createPullRequest
-# （gh api / graphql の文脈にあるものだけ）を対象にし、GET（PR 一覧・コメント取得）は拒否しない。
+# （gh api / graphql の文脈にあるものだけ）を対象にし、GET（PR 一覧・コメント取得）は拒否しない。gh api のパスは
+# 引用符で囲まれた形（"repos/o/r/pulls/16"）や ?query が続く形、番号が変数・コマンド置換（/pulls/$PR）の形も、
+# 引用符を残した版（keepq）のトークンで見る。
 # session_id の無い PreToolUse / PermissionRequest は /pr 中と確認できないので拒否側で扱う（fail-open にしない）。
-# bash -c / sh -c / eval で引用符の中を実行する場合だけ生文字列の部分一致も併用する。
+# bash -c / sh -c / eval で引用符の中を実行する場合だけ生文字列の部分一致（gh api の判定は生文字列への同じ走査）も併用する。
 # 既知の抜け道: git alias 経由（git -c alias.x=commit x）は捕捉しない（CLAUDE.md の指示で抑止）。
 #
 # 制約:
@@ -118,27 +121,84 @@ stripped_or_raw() {
   printf '%s' "$st"
 }
 
+# 拒否判定で共用する正規表現の部品
+# コマンド語の前に置ける形: 変数代入（X=1）・command・env・exec・nohup・time・builtin
+RE_WRAP='(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|env|exec|nohup|time|builtin)[[:space:]]+)*'
+# gh のサブコマンドの前に置けるオプション群。gh pr グループ共通のフラグ（-R owner/repo / -Rowner/repo / --repo owner/repo /
+# --repo=owner/repo）は pr の後ろ（gh pr -R o/r create）にも前（gh -R o/r pr create）にも置け、cobra はサブコマンドを探すとき
+# 未知の --flag も次の引数を値として読み飛ばす（gh pr --title x create も create として動く）ので、
+# 「オプション（＋値 1 つ）」の繰り返しとして許す
+RE_GHOPT='(--?[A-Za-z][^[:space:]]*[[:space:]]+([^-[:space:]][^[:space:]]*[[:space:]]+)?)*'
+# gh api コマンドの開始（区切り・行頭の直後。/usr/bin/gh・\gh・env X=1 gh も）
+RE_API_CMD="(^|[[:space:];&|(\`])${RE_WRAP}([^[:space:]]*/)?\\\\?gh[[:space:]]+api([[:space:]]|\$)"
+# gh api のパス: /pulls（作成）か /pulls/<番号>（更新）で終わる。番号は変数・コマンド置換（$PR / ${PR} / $(gh pr view …)）でもよい
+# （$( … ) とバッククォートは呼び出し側で閉じを空白にしているので、トークンは …/pulls/$(gh や …/pulls/ のように切れる）。
+# /pulls/N/comments 等のサブリソースは一致しない
+RE_API_PULLS='/pulls(/[0-9]+|/\$[^/]*|/)?$'
+# gh api の書き込み: -X / --method が POST/PUT/PATCH（-XPATCH の連結も）、または -f / -F / --input による暗黙の POST
+RE_API_WRITE='(^|[[:space:]])(-X|--method)[[:space:]=]*(POST|PUT|PATCH)([[:space:]]|$)|(^|[[:space:]])(-f|-F|--field|--raw-field|--input)([[:space:]=]|$)'
+RE_API_GET='(^|[[:space:]])(-X|--method)[[:space:]=]*GET([[:space:]]|$)'
+
+# 引数の文字列に、gh api で /pulls（作成）・/pulls/<番号>（更新）へ書き込むコマンドが含まれるか。含まれば 0。
+# 引数は引用符を残した版（keepq。引用符の中の空白・; & | は \001）か、bash -c / eval 経由のときの生文字列。
+# "repos/o/r/pulls/16" のように引用されたパスは引用符の中身を除去した文字列では "" しか残らないので、
+# この関数は引用符を残した文字列を ; & | でコマンド区切りに分け、gh api で始まる区切りごとに、引用符を取り除いた
+# トークンの中に /pulls か /pulls/<番号> で終わるパス（?query が続く形も含む）があり、かつ書き込みのメソッド・フィールドが
+# あるか（-X GET が明示されていれば読み取り）を見る。GET（PR 一覧・/pulls/N・/pulls/N/comments 等の取得）と、
+# /pulls/N/comments のようなサブリソースへの書き込み（コメント投稿）は対象外
+api_pr_write_in() {
+  local str="$1" seg tok base hit
+  str=${str//\\$'\n'/ }
+  str=${str//$'\n'/;}
+  while IFS= read -r seg; do
+    # 引用符を取り除く（中身は残る。keepq 版では中の空白・; & | は \001 のまま 1 トークンなので、echo "gh api …" の
+    # リテラルは gh[[:space:]]+api に一致しない。生文字列のときは bash -c "gh api …" の中身をそのまま判定する）
+    seg=${seg//[\"\']/}
+    [[ $seg =~ $RE_API_CMD ]] || continue
+    seg=${seg//[\)\`]/ }      # $( … ) やバッククォートの閉じがトークン末尾に付いていても判定できるようにする
+    hit=""
+    set -f
+    for tok in $seg; do
+      # ?query 以降は見ない（/pulls/16?x=1 の形）。${tok%%\?*} は 100KB のトークン（引用符の中の長い本文）で 1 秒以上かかるので
+      # 正規表現で先頭部分を取る
+      [[ $tok =~ ^[^?]* ]]; base=${BASH_REMATCH[0]}
+      # オプション（- で始まる）・-f key=value の値（= を含む）・引用符の中に空白や区切りを含んでいたもの（\001）はパスではない
+      case "$base" in -* | *=* | *$'\001'*) continue ;; esac
+      [[ $base =~ $RE_API_PULLS ]] && { hit=1; break; }
+    done
+    set +f
+    [ -n "$hit" ] || continue
+    [[ $seg =~ $RE_API_WRITE ]] && ! [[ $seg =~ $RE_API_GET ]] && return 0
+  done < <(printf '%s\n' "$str" | tr ';&|' '\n\n\n')
+  return 1
+}
+
 # 除去後の文字列にコミット・push・PR の作成・更新が含まれるか（引数: 生コマンド, 除去後）
 is_git_write() {
   local raw="$1" s="$2"
   # 行継続（\ + 改行）を結合し、改行は区切り ";" にして 1 行で判定する
   s=${s//\\$'\n'/ }
   s=${s//$'\n'/;}
-  local wrap='(([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*|command|env|exec|nohup|time|builtin)[[:space:]]+)*'
   local gitopt='((-[cC]|--git-dir|--work-tree|--namespace)[[:space:]]+[^[:space:]]+[[:space:]]+|--?[A-Za-z][^[:space:]]*[[:space:]]+)*'
   # 末尾は空白・行末のほか ; & | ) も区切りとして扱う（"git push;" / "(git push)" / "{ git push; }" の形）。
   # コマンド語直前の \（\git のエイリアス回避）も許す
-  local re="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?git[[:space:]]+${gitopt}(commit|push)([[:space:];&|)<>]|\$)"
-  local re_gh="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?gh[[:space:]]+pr[[:space:]]+(create|edit)([[:space:];&|)<>]|\$)"
-  # gh api は /pulls（作成）と /pulls/<番号>（更新）への書き込み（-X POST/PUT/PATCH、または -f / -F / --input による
-  # 暗黙の POST）だけを PR の作成・更新とみなす。GET（PR 一覧・/pulls/N・/pulls/N/comments 等の取得）と、
-  # /pulls/N/comments のようなサブリソースへの書き込み（コメント投稿）は拒否しない
-  local re_api="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?gh[[:space:]]+api[[:space:]]+[^;&|]*[^[:space:];&|]*/pulls(/[0-9]+)?([[:space:]]|\$)"
+  local re="(^|[[:space:];&|(\`])${RE_WRAP}([^[:space:]]*/)?\\\\?git[[:space:]]+${gitopt}(commit|push)([[:space:];&|)<>]|\$)"
+  # gh [-R o/r] pr [-R o/r] create|edit（RE_GHOPT のコメント参照）
+  local re_gh="(^|[[:space:];&|(\`])${RE_WRAP}([^[:space:]]*/)?\\\\?gh[[:space:]]+${RE_GHOPT}pr[[:space:]]+${RE_GHOPT}(create|edit)([[:space:];&|)<>]|\$)"
   printf '%s\n' "$s" | grep -Eq -- "$re" && return 0
   printf '%s\n' "$s" | grep -Eq -- "$re_gh" && return 0
-  if printf '%s\n' "$s" | grep -Eq -- "$re_api"; then
-    printf '%s\n' "$s" | grep -Eq -- '(^|[[:space:]])(-X|--method)[[:space:]=]+(POST|PUT|PATCH)([[:space:]]|$)|(^|[[:space:]])(-f|-F|--field|--raw-field|--input)([[:space:]=]|$)' \
-      && ! printf '%s\n' "$s" | grep -Eq -- '(^|[[:space:]])(-X|--method)[[:space:]=]+GET([[:space:]]|$)' && return 0
+  # gh api コマンドの有無は除去後の文字列で見る（echo "gh api …" のようなリテラルで発動しない）が、
+  # パス・メソッドの判定は引用符を残した版（keepq）で行う（api_pr_write_in のコメント参照）
+  if [[ $s =~ $RE_API_CMD ]]; then
+    local kq
+    case "$raw" in
+      *[\"\']*)
+        # keepq 版（HEREDOC 本文だけ除去）。awk が無い・失敗したときは生文字列で見る（fail-open にしない）
+        kq=$(printf '%s\n' "$raw" | awk -v keepq=1 -f "$STRIP_AWK" 2>/dev/null) || kq=""
+        [ -n "$kq" ] || kq="$raw" ;;
+      *) kq="$s" ;;   # 引用符が無ければ keepq 版は除去後と同じなので awk を呼び直さない（巨大入力での 2 回目の走査を省く）
+    esac
+    api_pr_write_in "$kq" && return 0
   fi
   # GraphQL の createPullRequest mutation（クエリは引用符の中なので生文字列で見る。
   # gh api / graphql の文脈にあるときだけ。grep createPullRequest のような読み取りでは発動しない）
@@ -148,6 +208,11 @@ is_git_write() {
   # "eval" を含むファイル名等（tests/eval, evaluate）や ssh では発動しない
   if printf '%s\n' "$raw" | grep -Eq -- '(^|[[:space:];&|(`])(eval[[:space:]]|([^[:space:]]*/)?(ba|z|da|k)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*c[A-Za-z]*([[:space:]]|$)|([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]*<<)|\|[[:space:]]*([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]|$)'; then
     case "$raw" in *'git commit'* | *'git push'* | *'gh pr create'* | *'gh pr edit'*) return 0 ;; esac
+    # gh pr -R o/r create / gh -R o/r pr create のようにサブコマンドの前にフラグを置いた形
+    local re_gh_raw="gh[[:space:]]+${RE_GHOPT}pr[[:space:]]+${RE_GHOPT}(create|edit)([^A-Za-z0-9_-]|\$)"
+    [[ $raw =~ $re_gh_raw ]] && return 0
+    # gh api で /pulls へ書き込む形（引用符の中なので生文字列をそのまま区切って見る）
+    case "$raw" in *gh*api*) api_pr_write_in "$raw" && return 0 ;; esac
   fi
   return 1
 }
@@ -155,6 +220,7 @@ is_git_write() {
 # /pr 中の自動承認対象か（引数: 生コマンド）。対象なら 0
 is_auto_approvable() {
   local raw="$1" s rest flat is_val
+  # gh pr -R o/r create / gh -R o/r pr create のようにサブコマンドの前にフラグを置いた形はここで落ちる（-R は別リポジトリ宛なので自動承認しない）
   case "$raw" in "git push" | "git push "* | "gh pr create" | "gh pr create "* | "gh pr edit" | "gh pr edit "* | "git commit "*) ;; *) return 1 ;; esac
 
   s=$(strip_cmd "$raw")

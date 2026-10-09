@@ -117,6 +117,13 @@ pr B4N none "$S_ON" 'gh pr edit 16 --title "t" https://github.com/o/r/pull/1'
 pr B4O none "$S_ON" 'gh pr edit -Rother/repo 16 --title x'
 pr B4P none "$S_ON" 'gh pr create -Rother/repo --fill'
 pr B4P2 none "$S_ON" 'gh pr edit --remove-milestone other/repo#1'
+echo "#   gh pr グループ共通のフラグ（-R / --repo）をサブコマンドの前に置いた形も別リポジトリ宛なので自動承認しない"
+pr B4V none "$S_ON" 'gh pr -R other/repo create --fill'
+pr B4W none "$S_ON" 'gh pr --repo other/repo edit 16 --title t'
+pr B4X none "$S_ON" 'gh pr --repo=other/repo create --fill'
+pr B4Y none "$S_ON" 'gh pr -Rother/repo edit 16 --title t'
+pr B4Z none "$S_ON" 'gh -R other/repo pr create --fill'
+pr B4Z1 none "$S_ON" 'gh --repo other/repo pr edit 16 --title t'
 echo "#   gh pr edit: オプションの値（タイトル・本文・HEREDOC）の # や URL、ブランチ名の / では落とさない"
 pr B4Q allow "$S_ON" 'gh pr edit 16 --title "fix #1 (https://example.com/a)" --body "see #2"'
 pr B4R allow "$S_ON" 'gh pr edit feature/x --title t'
@@ -224,6 +231,46 @@ pre C2V deny "$S_OFF" 'gh api --method PATCH repos/o/r/pulls/16 --input b.json'
 pre C2W deny "$S_OFF" 'gh api repos/o/r/pulls/16 -f title=x'
 pre C2X deny "$S_OFF" 'gh api -X PUT repos/o/r/pulls/16'
 pre C2Y deny "$S_OFF" 'gh api --method=PATCH /repos/o/r/pulls/16 -F state=closed'
+echo "#   gh pr グループ共通のフラグ（-R / --repo）をサブコマンドの前に置いた形（gh pr -R o/r create）も拒否する"
+pre C2Z deny "$S_OFF" 'gh pr -R owner/repo create --fill'
+pre C2Z1 deny "$S_OFF" 'gh pr --repo owner/repo edit 16 --title x'
+pre C2Z2 deny "$S_OFF" 'gh pr --repo=owner/repo create'
+pre C2Z3 deny "$S_OFF" 'gh pr -Rowner/repo create --fill'
+pre C2Z4 deny "$S_OFF" 'gh pr -R owner/repo --title x create'
+pre C2Z5 deny "$S_OFF" 'bash -c "gh pr -R o/r create --fill"'
+pre C2Z6 deny "$S_OFF" 'gh pr list && gh pr --repo o/r edit 16 --title x'
+echo "#   -R / --repo を pr の前に置いた形（gh -R o/r pr create。cobra は root の未知フラグも値つきとして読み飛ばして pr create を解決する）も拒否する"
+pre C2Z7 deny "$S_OFF" 'gh -R owner/repo pr create --fill'
+pre C2Z8 deny "$S_OFF" 'gh --repo owner/repo pr edit 16 --title x'
+pre C2Z9 deny "$S_OFF" 'gh --repo=owner/repo pr create'
+pre C2ZA deny "$S_OFF" 'gh -Rowner/repo pr create --fill'
+pre C2ZB deny "$S_OFF" 'gh -R owner/repo pr -R other/repo create --fill'
+pre C2ZC deny "$S_OFF" 'bash -c "gh -R o/r pr create --fill"'
+pre C2ZD deny "$S_OFF" 'eval "gh --repo o/r pr edit 16 --title x"'
+echo "#   bash -c / eval / パイプで渡した文字列の中の gh api の書き込みも拒否する"
+pre C2ZE deny "$S_OFF" 'bash -c "gh api -X POST repos/o/r/pulls -f title=x"'
+pre C2ZF deny "$S_OFF" 'eval "gh api -X PATCH repos/o/r/pulls/16 -f title=x"'
+pre C2ZG deny "$S_OFF" "sh -c 'gh api repos/o/r/pulls --input b.json'"
+pre C2ZH deny "$S_OFF" "printf 'gh api -X PATCH repos/o/r/pulls/16 -f title=x' | bash"
+pre C2ZI deny "$S_OFF" $'bash <<\'EOF\'\ngh api -X POST repos/o/r/pulls -f title=x\nEOF'
+echo "#   PR 番号が変数・コマンド置換（\$PR / \${PR} / \$(gh pr view …) / バッククォート）でも /pulls/<番号> への書き込みは拒否する"
+pre C2ZJ deny "$S_OFF" 'gh api -X PATCH repos/o/r/pulls/$PR -f title=x'
+pre C2ZK deny "$S_OFF" 'gh api -X PATCH "repos/o/r/pulls/${PR}" -f title=x'
+pre C2ZL deny "$S_OFF" 'gh api -X PATCH repos/o/r/pulls/$(gh pr view --json number -q .number) -f title=x'
+pre C2ZM deny "$S_OFF" 'gh api -X PATCH "repos/o/r/pulls/$(gh pr view --json number -q .number)" -f title=x'
+pre C2ZN deny "$S_OFF" 'gh api -X PATCH repos/o/r/pulls/`gh pr view --json number -q .number` -f title=x'
+echo "#   gh api のパスが引用符で囲まれている・?query が続く・メソッドが連結（-XPATCH）や引用されている形も拒否する"
+pre C2a deny "$S_OFF" 'gh api -X PATCH "repos/o/r/pulls/16" -f title=x'
+pre C2b deny "$S_OFF" "gh api -X PATCH 'repos/o/r/pulls/16' -f title=x"
+pre C2c deny "$S_OFF" 'gh api -X POST "repos/{owner}/{repo}/pulls" -f title=t -f head=x -f base=main'
+pre C2d deny "$S_OFF" 'gh api -X PATCH repos/o/r/pulls/16?foo=1 -f title=x'
+pre C2e deny "$S_OFF" 'gh api -X PATCH "repos/o/r/pulls/16?foo=1&bar=2" -f title=x'
+pre C2f deny "$S_OFF" 'gh api -XPATCH repos/o/r/pulls/16 -f title=x'
+pre C2g deny "$S_OFF" 'gh api -X "PATCH" repos/o/r/pulls/16'
+pre C2h deny "$S_OFF" 'gh api repos/o/r/pulls; gh api -X POST repos/o/r/pulls -f title=x'   # 読み取りの後に書き込みを繋いだ複合
+pre C2i deny "$S_OFF" 'echo $(gh api -X POST repos/o/r/pulls -f title=x)'
+pre C2j deny "$S_OFF" $'gh api repos/o/r/pulls --input - <<EOF\n{"title":"x"}\nEOF'
+pre C2k deny "$S_OFF" 'gh api --input body.json "repos/o/r/pulls"'
 # deny の理由文は PR の更新も対象に含むことが分かる文言になっている
 out=$(run_hook "$HOOK" PreToolUse "$S_OFF" 'gh pr edit 16 --title x'); case "$out" in *'PR の作成・更新'*'/pr'*) r=ok ;; *) r="理由文が一致しない: $out" ;; esac
 report C2T-deny-reason-mentions-edit ok "$r" ""
@@ -247,6 +294,45 @@ pre C6E none "$S_OFF" 'gh api repos/o/r/pulls/16 -X GET -f per_page=1'
 pre C6F none "$S_OFF" 'gh api repos/o/r/pulls/16/comments -f body=LGTM'
 pre C6G none "$S_OFF" 'gh api -X POST repos/o/r/pulls/16/reviews -f event=APPROVE'
 pre C6H none "$S_OFF" 'gh api repos/o/r/pulls/16/files'
+echo "#   引用符で囲まれたパス・?query・連結メソッドでも、読み取りと /pulls 以外への書き込みは拒否しない"
+pre C6I none "$S_OFF" 'gh api "repos/o/r/pulls/16"'
+pre C6J none "$S_OFF" 'gh api "repos/o/r/pulls/16?per_page=1" --jq .title'
+pre C6K none "$S_OFF" 'gh api -XGET repos/o/r/pulls -f state=open'
+pre C6L none "$S_OFF" 'gh api repos/o/r/pulls -f title=x -X GET'
+pre C6M none "$S_OFF" 'gh api repos/o/r/issues/1/comments -f body="see /pulls/16"'   # 値の中の /pulls/16 はパスではない
+pre C6N none "$S_OFF" 'gh api "repos/o/r/pulls/16/comments" -f body=x'
+pre C6O none "$S_OFF" 'gh api repos/o/r/pulls/16 --jq .title && gh api repos/o/r/pulls -X GET'
+pre C6P none "$S_OFF" 'echo "gh api -X POST repos/o/r/pulls -f title=x"'
+pre C6Q none "$S_OFF" 'gh api graphql -f query="{ repository(owner:\"o\", name:\"r\") { pullRequests(first:1) { nodes { title } } } }"'
+echo "#   gh pr の -R / --repo 付きでも create / edit 以外は拒否しない"
+pre C6R none "$S_OFF" 'gh pr -R owner/repo view 16'
+pre C6S none "$S_OFF" 'gh pr -R owner/repo list --state open'
+pre C6T none "$S_OFF" 'gh pr list --search create'
+pre C6U none "$S_OFF" 'gh -R owner/repo pr list -L 1'
+pre C6V none "$S_OFF" 'gh -R owner/repo pr view 16'
+pre C6W none "$S_OFF" 'gh --version'
+echo "#   番号が変数・コマンド置換でも GET とサブリソースへの書き込みは拒否しない。bash -c 内の gh api の読み取りも拒否しない"
+pre C6X none "$S_OFF" 'gh api repos/o/r/pulls/$PR'
+pre C6Y none "$S_OFF" 'gh api "repos/o/r/pulls/${PR}" --jq .title'
+pre C6Z none "$S_OFF" 'gh api -X POST repos/o/r/pulls/$PR/comments -f body=x'
+pre C6Z1 none "$S_OFF" 'gh api -X POST repos/o/r/pulls/${PR}/reviews -f event=APPROVE'
+pre C6Z2 none "$S_OFF" 'gh api repos/o/r/pulls/$(gh pr view --json number -q .number)/files'
+pre C6Z3 none "$S_OFF" 'bash -c "gh api repos/o/r/pulls"'
+pre C6Z4 none "$S_OFF" 'bash -c "gh api repos/o/r/pulls/16 --jq .title"'
+pre C6Z5 none "$S_OFF" 'bash -c "gh api -X POST repos/o/r/pulls/16/comments -f body=x"'
+pre C6Z6 none "$S_OFF" 'bash -c "gh api repos/o/r/pulls -X GET -f state=open"'
+echo "#   巨大な入力（gh api を含む 100KB 程度）でもフックの timeout（10 秒）に収まる（判定も変わらない）"
+BIG_A=$(for i in $(seq 1 2500); do printf 'gh api repos/o/r/pulls/%d --jq .title\n' "$i"; done)
+BIG_B="gh api repos/o/r/issues -X POST $(for i in $(seq 1 10000); do printf -- '-f k%d=v ' "$i"; done)"
+BIG_C="gh api -X PATCH repos/o/r/pulls/16 -f body=\"$(head -c 100000 /dev/zero | tr '\0' 'a' | fold -w 50 | tr '\n' ' ')\""
+t0=$EPOCHREALTIME
+pre C90-big-reads none "$S_OFF" "$BIG_A"
+pre C91-big-fields none "$S_OFF" "$BIG_B"
+pre C92-big-body deny "$S_OFF" "$BIG_C"
+t1=$EPOCHREALTIME
+big_sec=$(awk -v a="$t0" -v b="$t1" 'BEGIN{printf "%d", b-a}')
+[ "$big_sec" -lt 9 ] && r=ok || r="3 件で ${big_sec} 秒（1 件あたりフックの timeout 10 秒に近い）"
+report C93-big-input-time ok "$r" ""
 
 echo "#   区切りなしリダイレクト・HEREDOC / パイプでシェルに流す形・閉じない HEREDOC"
 pre C70 deny "$S_OFF" 'git push>/dev/null'
@@ -284,8 +370,8 @@ pr C52 deny "$S_OFF" 'gh pr edit 16 --title x'
 echo "# D. フラグの寿命"
 S=test-prmode-life-$$
 F="$T/claude-pr-mode-$S"
-# 展開後の本文は SKILL.md の最初の "# " 行で見分ける（フックと同じ解決方法。読めなければ同じフォールバック）。
-# 上の libless コピーはこの相対パスの先に SKILL.md が無いので、フォールバックのリテラルが使われる
+# 展開後の本文は SKILL.md の最初の "# " 行で見分ける（フックと同じ解決方法）。フックは読めなければ展開本文と判定せず
+# フラグを消す（fail-closed。リテラルへのフォールバックは持たない）。D04c が SKILL.md の無いコピーでこれを検査する
 PR_SKILL="$(dirname "$(readlink -f "$HOOK" 2>/dev/null || printf '%s' "$HOOK")")/../skills/pr/SKILL.md"
 PR_H1=$(grep -m1 '^# ' "$PR_SKILL" 2>/dev/null)
 [ -n "$PR_H1" ] || { echo "  NG [D00] skills/pr/SKILL.md の H1 が読めません（フックはこの見出しで /pr の展開本文を見分ける）"; FAIL=$((FAIL+1)); }
