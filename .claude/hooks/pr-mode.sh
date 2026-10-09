@@ -2,8 +2,9 @@
 
 # /pr モード管理フック
 # ユーザーが /pr を実行しているターンの間だけ、git commit / git push /
-# gh pr create の確認ダイアログ（permissions.ask）をスキップして自動許可する。
+# gh pr create / gh pr edit の確認ダイアログ（permissions.ask）をスキップして自動許可する。
 # それ以外の場面では同コマンドを実行前に拒否する。gh pr merge は常に ask。
+# gh pr comment / close / ready 等は対象外（ask ルールにも拒否判定にも入れていない）。
 #
 # 登録イベントと役割:
 # - UserPromptExpansion: スラッシュコマンド展開時に発火。command_name が "pr" なら
@@ -13,18 +14,26 @@
 #   中断などで Stop が走らず残った残骸フラグをここで確実に消す
 #   （UserPromptExpansion との発火順は保証されないが、/pr のときは Expansion 側が
 #     後から touch し直すので成立する）
-# - PreToolUse(Bash): フラグが無ければ、コミット・push・PR作成を含むコマンドを
+# - PreToolUse(Bash): フラグが無ければ、コミット・push・PR の作成・更新を含むコマンドを
 #   permissionDecision=deny で拒否する。PreToolUse は permission mode
 #   （auto / acceptEdits / bypassPermissions）や allow ルールに関係なく毎回発火し、
 #   deny は必ず効くため、最終防衛層はここに置く
 # - PermissionRequest(Bash): フラグがあれば、対象コマンドを decision.behavior=allow で
 #   自動承認する（PreToolUse の allow では permissions.ask を上書きできないため、
 #   ask ダイアログの代替はこのイベントで行う）
-# - Stop: ターン終了時にフラグ削除
+# - Stop: ターン終了時にフラグ削除。ただし verify-gate.sh がこの Stop でターンを続行させる
+#   （stop_hook_active が false かつ、verify-gate の状態ファイル
+#     ${TMPDIR:-/tmp}/claude-verify-gate-<session_id> に空でない行が 1 行以上ある。判定は verify-gate.sh の
+#     Stop と同じ読み方＝同じ read ループで行う）ときはフラグを残す。続行後に /pr の commit / push / gh pr create が拒否されない
+#   ようにするため。Stop フック同士の実行順は保証されないが、Stop 時点ではツールが走らないので
+#   状態ファイルは安定している（verify-gate は Stop で状態ファイルを書き換えない）。
+#   残ったフラグは次の UserPromptSubmit（/pr 以外）で消えるので安全側に倒れる。
+#   session_id が verify-gate の受け付けない形（^[A-Za-z0-9._-]+$ 以外）なら verify-gate は
+#   何もしないので従来どおり消す
 #
 # 自動承認の条件（すべて満たすときだけ allow。満たさなければ何も出力せず通常の
 # 確認ダイアログに落とす。拒否はしない）:
-# - コマンド文字列が git commit / git push / gh pr create で始まる
+# - コマンド文字列が git commit / git push / gh pr create / gh pr edit で始まる
 # - 引用符の中身と HEREDOC 本文を除いた上で、複合コマンド・コマンド置換・
 #   リダイレクトを含まない（&& || ; | & $( ` <( >( > <。2>&1 は許容）。
 #   除去は lib/strip-shell.awk（引用符の種別を追跡する状態機械）で行う。
@@ -33,7 +42,8 @@
 #   -d / :branch）、--mirror、--no-verify、main / master への push を含まない。
 #   さらに cwd の現在ブランチが main / master なら落とす
 # - git commit: --no-verify / -n を含む短縮群 / --amend を含まない
-# - gh pr create: 別リポジトリ宛（-R / --repo）を含まない
+# - gh pr create / gh pr edit: 別リポジトリ宛（-R / -Rowner/repo / --repo）を含まない。gh pr edit はさらに、
+#   位置引数に URL（://）や OWNER/REPO#番号（#）を含まない（オプションの値＝タイトル・本文の中身は見ない）
 # - 引用符を含むトークン（"--force" / --for"ce" / -"f" / "main" / ma'in'）は、引用符を取り除いた形が
 #   オプション（- で始まる）か main / master 宛なら落とす（引用符の中身は除去されるので、
 #   引用符を残した版のトークンごとに見る）。push の引数に変数（$BRANCH）を含まない
@@ -41,9 +51,10 @@
 #   拒否判定側は逆に、除去に失敗したら生文字列で判定する（fail-open にしない）
 #
 # 拒否判定（フラグ無し）は、除去後の文字列に対する正規表現で行う。
-# git [-C dir] [-c k=v] commit|push、/usr/bin/git、\git（エイリアス回避）、command git、env X=1 git、
-# "git push;" / "(git push)" のような区切り直前の形を捕捉し、引用符の中のリテラル（git log --grep "git commit" 等）
-# は拒否しない。gh api は /pulls への書き込み（POST / -f / --input）と GraphQL の createPullRequest
+# git [-C dir] [-c k=v] commit|push、gh pr create|edit、/usr/bin/git、\git（エイリアス回避）、command git、
+# env X=1 git、"git push;" / "(git push)" のような区切り直前の形を捕捉し、引用符の中のリテラル
+# （git log --grep "git commit" 等）は拒否しない。gh api は /pulls（作成）と /pulls/<番号>（更新）への書き込み
+# （POST/PUT/PATCH / -f / --input。/pulls/N/comments 等サブリソースへの書き込みは対象外）と GraphQL の createPullRequest
 # （gh api / graphql の文脈にあるものだけ）を対象にし、GET（PR 一覧・コメント取得）は拒否しない。
 # session_id の無い PreToolUse / PermissionRequest は /pr 中と確認できないので拒否側で扱う（fail-open にしない）。
 # bash -c / sh -c / eval で引用符の中を実行する場合だけ生文字列の部分一致も併用する。
@@ -53,7 +64,8 @@
 # - フラグは session_id 単位。/pr の git 操作をサブエージェントに委譲すると
 #   別セッション扱いで拒否される（SKILL.md で「メインが直接実行」と明記）
 # - Stop でフラグが消えるため、/pr の途中でターンを終えて質問すると次ターンは拒否
-#   される（SKILL.md で AskUserQuestion を使う旨を明記）
+#   される（SKILL.md で AskUserQuestion を使う旨を明記）。verify-gate が続行させた Stop だけは例外
+#   （上記）
 # - jq が無い・入力 JSON が壊れている場合は何もせず exit 0（~/.claude/pr-mode.log に記録）。
 #   どのイベントでも exit 0 固定（Stop / UserPromptSubmit での exit 2 は処理を止めるため）
 
@@ -106,7 +118,7 @@ stripped_or_raw() {
   printf '%s' "$st"
 }
 
-# 除去後の文字列にコミット・push・PR作成が含まれるか（引数: 生コマンド, 除去後）
+# 除去後の文字列にコミット・push・PR の作成・更新が含まれるか（引数: 生コマンド, 除去後）
 is_git_write() {
   local raw="$1" s="$2"
   # 行継続（\ + 改行）を結合し、改行は区切り ";" にして 1 行で判定する
@@ -117,10 +129,11 @@ is_git_write() {
   # 末尾は空白・行末のほか ; & | ) も区切りとして扱う（"git push;" / "(git push)" / "{ git push; }" の形）。
   # コマンド語直前の \（\git のエイリアス回避）も許す
   local re="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?git[[:space:]]+${gitopt}(commit|push)([[:space:];&|)<>]|\$)"
-  local re_gh="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?gh[[:space:]]+pr[[:space:]]+create([[:space:];&|)<>]|\$)"
-  # gh api は /pulls エンドポイントへの書き込み（-X POST/PUT/PATCH、または -f / -F / --input による暗黙の POST）
-  # だけを PR 作成とみなす。GET（PR 一覧・/pulls/N/comments 等の取得）は拒否しない
-  local re_api="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?gh[[:space:]]+api[[:space:]]+[^;&|]*[^[:space:];&|]*/pulls([[:space:]]|\$)"
+  local re_gh="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?gh[[:space:]]+pr[[:space:]]+(create|edit)([[:space:];&|)<>]|\$)"
+  # gh api は /pulls（作成）と /pulls/<番号>（更新）への書き込み（-X POST/PUT/PATCH、または -f / -F / --input による
+  # 暗黙の POST）だけを PR の作成・更新とみなす。GET（PR 一覧・/pulls/N・/pulls/N/comments 等の取得）と、
+  # /pulls/N/comments のようなサブリソースへの書き込み（コメント投稿）は拒否しない
+  local re_api="(^|[[:space:];&|(\`])${wrap}([^[:space:]]*/)?\\\\?gh[[:space:]]+api[[:space:]]+[^;&|]*[^[:space:];&|]*/pulls(/[0-9]+)?([[:space:]]|\$)"
   printf '%s\n' "$s" | grep -Eq -- "$re" && return 0
   printf '%s\n' "$s" | grep -Eq -- "$re_gh" && return 0
   if printf '%s\n' "$s" | grep -Eq -- "$re_api"; then
@@ -134,15 +147,15 @@ is_git_write() {
   # リテラル判定ができないので生文字列で見る。単語としての eval / sh だけを対象にし、
   # "eval" を含むファイル名等（tests/eval, evaluate）や ssh では発動しない
   if printf '%s\n' "$raw" | grep -Eq -- '(^|[[:space:];&|(`])(eval[[:space:]]|([^[:space:]]*/)?(ba|z|da|k)?sh[[:space:]]+(-[A-Za-z]+[[:space:]]+)*-[A-Za-z]*c[A-Za-z]*([[:space:]]|$)|([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]+-[A-Za-z]+)*[[:space:]]*<<)|\|[[:space:]]*([^[:space:]]*/)?(ba|z|da|k)?sh([[:space:]]|$)'; then
-    case "$raw" in *'git commit'* | *'git push'* | *'gh pr create'*) return 0 ;; esac
+    case "$raw" in *'git commit'* | *'git push'* | *'gh pr create'* | *'gh pr edit'*) return 0 ;; esac
   fi
   return 1
 }
 
 # /pr 中の自動承認対象か（引数: 生コマンド）。対象なら 0
 is_auto_approvable() {
-  local raw="$1" s rest flat
-  case "$raw" in "git push" | "git push "* | "gh pr create" | "gh pr create "* | "git commit "*) ;; *) return 1 ;; esac
+  local raw="$1" s rest flat is_val
+  case "$raw" in "git push" | "git push "* | "gh pr create" | "gh pr create "* | "gh pr edit" | "gh pr edit "* | "git commit "*) ;; *) return 1 ;; esac
 
   s=$(strip_cmd "$raw")
   # 許容する定型だけ判定前に取り除く: "$(cat <<'EOF'" と 2>&1 系
@@ -189,9 +202,34 @@ is_auto_approvable() {
       case "$flat" in *--no-verify* | *--amend*) return 1 ;; esac
       printf '%s\n' "$flat" | grep -Eq -- '(^|[[:space:]])-[A-Za-z]*n[A-Za-z]*([[:space:]]|$)' && return 1
       ;;
-    "gh pr create"*)
-      # 別リポジトリへの作成（-R / --repo）は /pr の対象外なので確認ダイアログに落とす
-      printf '%s\n' "$flat" | grep -Eq -- '(^|[[:space:]])(-R|--repo)([[:space:]=]|$)' && return 1
+    "gh pr create"* | "gh pr edit"*)
+      # 別リポジトリへの作成・更新（-R / --repo。-Rother/repo の値連結も）は /pr の対象外なので確認ダイアログに落とす
+      printf '%s\n' "$flat" | grep -Eq -- '(^|[[:space:]])(-R|--repo([[:space:]=]|$))' && return 1
+      case "$raw" in "gh pr edit"*)
+        # gh pr edit は位置引数（PR の URL / OWNER/REPO#番号）でも別リポジトリの PR を指せるので、位置引数に
+        # "://" か "#" を含むものがあれば落とす。引用符を残した版（kq）のトークンで見る: 引用符の中身は
+        # 判定対象だが、オプションの値（直前のトークンが - で始まり = を含まない）はタイトル・本文なので見ない。
+        # HEREDOC 本文は kq でも除去済み。ブランチ名（feature/x）や番号だけの位置引数は許す
+        local prev="" n=0
+        set -f
+        for tok in $kq; do
+          n=$((n + 1)); nq=${tok//[\"\']/}
+          if [ "$n" -gt 3 ]; then
+            case "$prev" in
+              --) is_val=0 ;;
+              --remove-milestone) is_val=0 ;; # gh pr edit で唯一値を取らないフラグ
+              -*=*) is_val=0 ;;
+              -*) is_val=1 ;;
+              *) is_val=0 ;;
+            esac
+            if [ "$is_val" -eq 0 ]; then
+              case "$nq" in *'://'* | *'#'*) set +f; return 1 ;; esac
+            fi
+          fi
+          prev="$nq"
+        done
+        set +f ;;
+      esac
       ;;
   esac
   return 0
@@ -223,7 +261,7 @@ case "$event" in
     cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')
     [ -n "$cmd" ] || exit 0
     if is_git_write "$cmd" "$(stripped_or_raw "$cmd")"; then
-      jq -cn '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"コミット・push・PR作成はユーザーが /pr を実行しているターンでのみ許可されます。自分では実行せず、ユーザーに /pr の実行を依頼してください。"}}'
+      jq -cn '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"コミット・push・PR の作成・更新はユーザーが /pr を実行しているターンでのみ許可されます。自分では実行せず、ユーザーに /pr の実行を依頼してください。"}}'
     fi
     ;;
   PermissionRequest)
@@ -236,10 +274,27 @@ case "$event" in
       fi
     elif is_git_write "$cmd" "$(stripped_or_raw "$cmd")"; then
       # 通常は PreToolUse で止まる。PreToolUse が無効な環境向けの二重化
-      jq -cn '{hookSpecificOutput:{hookEventName:"PermissionRequest",decision:{behavior:"deny",message:"コミット・push・PR作成はユーザーが /pr を実行しているターンでのみ許可されます。ユーザーに /pr の実行を依頼してください。"}}}'
+      jq -cn '{hookSpecificOutput:{hookEventName:"PermissionRequest",decision:{behavior:"deny",message:"コミット・push・PR の作成・更新はユーザーが /pr を実行しているターンでのみ許可されます。ユーザーに /pr の実行を依頼してください。"}}}'
     fi
     ;;
   Stop)
+    # verify-gate.sh がこの Stop でターンを続行させるとき（stop_hook_active が false かつ状態ファイルに空でない行がある。
+    # verify-gate.sh の Stop と同じ read ループで判定する）はフラグを残し、続行後の /pr の git 操作が拒否されないようにする。
+    # Stop 時点ではツールが走らないので状態ファイルは安定しており、Stop フック同士の実行順に依存しない。
+    # 残ったフラグは次の UserPromptSubmit（/pr 以外）で消える。session_id が verify-gate の受け付けない形なら
+    # verify-gate は続行させないので従来どおり消す
+    if [[ "$session" =~ ^[A-Za-z0-9._-]+$ ]]; then
+      vg_state="${TMPDIR:-/tmp}"
+      vg_state="${vg_state%/}/claude-verify-gate-${session}"
+      active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false')
+      vg_pending=""
+      if [ "$active" != "true" ] && [ -f "$vg_state" ]; then
+        while IFS= read -r vg_line; do
+          [ -n "$vg_line" ] && { vg_pending=1; break; }
+        done <"$vg_state"
+      fi
+      [ -n "$vg_pending" ] && exit 0
+    fi
     rm -f "$flag"
     ;;
 esac

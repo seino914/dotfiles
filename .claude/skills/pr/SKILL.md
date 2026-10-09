@@ -1,6 +1,6 @@
 ---
 name: pr
-description: 現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する。ユーザーが /pr と明示的に指示したときのみ使用する。git commit / git push / gh pr create はこのスキルの実行中に限り許可される。
+description: 現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（既に open な PR があれば更新する）。ユーザーが /pr と明示的に指示したときのみ使用する。git commit / git push / gh pr create / gh pr edit はこのスキルの実行中に限り許可される。
 disable-model-invocation: true
 allowed-tools:
   - Bash(git status:*)
@@ -16,7 +16,6 @@ allowed-tools:
   - Bash(gh repo view:*)
   - Bash(gh pr view:*)
   - Bash(gh pr list:*)
-  - Bash(gh pr edit:*)
 ---
 
 <!-- 下の見出し行は pr-mode.sh が /pr の展開本文を見分けるために読む。H1 を無くさないこと -->
@@ -27,11 +26,11 @@ allowed-tools:
 
 ## 前提（機構上の制約）
 
-- このスキルはユーザーの `/pr` 指示によってのみ実行する。それ以外の場面で git commit / git push / gh pr create を実行してはならない（`hooks/pr-mode.sh` が実行前に拒否する）
-- `/pr` を送信したターンの間だけ、`hooks/pr-mode.sh` が git commit / git push / gh pr create の確認ダイアログを自動承認する
-- **自動承認は単一コマンドに限る**。`git commit` / `git push` / `gh pr create` は必ず **1つずつ独立した Bash 呼び出しで実行**し、`&&` `;` `|` や改行で他のコマンド（`git add` や `git checkout -b` を含む）と繋がない。複合コマンド・コマンド置換（`$( )`）・リダイレクトはフックが自動承認せず確認ダイアログに落ちる。例外は本文を渡す `"$(cat <<'EOF' … EOF\n)"` の定型だけ
+- このスキルはユーザーの `/pr` 指示によってのみ実行する。それ以外の場面で git commit / git push / gh pr create / gh pr edit を実行してはならない（`hooks/pr-mode.sh` が実行前に拒否する）
+- `/pr` を送信したターンの間だけ、`hooks/pr-mode.sh` が git commit / git push / gh pr create / gh pr edit の確認ダイアログを自動承認する
+- **自動承認は単一コマンドに限る**。`git commit` / `git push` / `gh pr create` / `gh pr edit` は必ず **1つずつ独立した Bash 呼び出しで実行**し、`&&` `;` `|` や改行で他のコマンド（`git add` や `git checkout -b` を含む）と繋がない。複合コマンド・コマンド置換（`$( )`）・リダイレクトはフックが自動承認せず確認ダイアログに落ちる。例外は本文を渡す `"$(cat <<'EOF' … EOF\n)"` の定型だけ
 - **ターンを終えない**。ターンが終わると Stop フックがフラグを消し、次のターンのコミット・push は拒否される。途中でユーザーに確認が必要なときは **AskUserQuestion ツール**で質問する。やむを得ずテキスト応答でターンを終える場合は「回答後にもう一度 /pr を実行してください」と必ず添える
-- git commit / git push / gh pr create は**メインセッションが直接実行**し、サブエージェントへ委譲しない（フラグはセッション単位なので別セッション扱いで拒否される）
+- git commit / git push / gh pr create / gh pr edit は**メインセッションが直接実行**し、サブエージェントへ委譲しない（フラグはセッション単位なので別セッション扱いで拒否される）
 - `--no-verify` / `--amend` / force push / `--delete` / デフォルトブランチへの push はフックが自動承認しない。使わない
 
 ## 手順
@@ -87,7 +86,7 @@ EOF
   - 本文：変更の概要と変更点の箇条書き（複数コミットならコミットごとの内容が分かるように）。`--body "$(cat <<'EOF' … EOF\n)"` の HEREDOC で渡す。ハーネスの指示でフッター（`🤖 Generated with …`）を付ける場合は末尾に置く
   - `--base` はデフォルトブランチ。`.github/pull_request_template.md` があればその構成に従う
 - 既に open な PR が**あれば**、新規作成せず、push で増えたコミットが説明に反映されるようタイトル・本文を作り直して更新する
-  - `git log origin/<デフォルトブランチ>..HEAD --oneline` で PR に含まれる**全コミット**を取り、上の `gh pr create` と同じ基準でタイトル・本文を作り直す（今回分の追記ではなく全体の作り直し。後から目的が増えた PR でもタイトルと食い違わないようにするため）
+  - `gh pr view <番号> --json commits --jq '.commits[].messageHeadline'` で PR に含まれる**全コミット**を GitHub 側から取り（ローカルの `origin/<デフォルトブランチ>` は fetch していないと古く、`git log origin/<デフォルトブランチ>..HEAD` では PR の実際のコミット集合とずれる）、上の `gh pr create` と同じ基準でタイトル・本文を作り直す（今回分の追記ではなく全体の作り直し。後から目的が増えた PR でもタイトルと食い違わないようにするため）
   - 先に `gh pr view <番号> --json title,body` で現在の内容を読み、/pr が生成していない記述（ユーザーが書いたレビュー依頼・関連 Issue・補足など）があれば作り直した本文にも残す
   - `gh pr edit <番号> --title "<タイトル>" --body "$(cat <<'EOF' … EOF\n)"` で更新する（単独の Bash 呼び出し）
 

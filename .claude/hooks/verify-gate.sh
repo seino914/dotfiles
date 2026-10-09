@@ -36,6 +36,9 @@
 #       「設計どおりの指示」の形。transcript には hook error ではなく Stop hook feedback として出る）
 #     stop_hook_active が true → これ以上止めない（無限ループ防止）。systemMessage でユーザーに
 #       検証未実行のまま終了した旨を警告する。状態ファイルは残す（次のターンでまた促す）
+#     Stop では状態ファイルを書き換えない。pr-mode.sh の Stop は「stop_hook_active が false かつ
+#       状態ファイルが空でない」（= ここが続行させる）と同じ条件を見て /pr フラグを残すので、
+#       この判定条件・状態ファイルのパス・session_id の受け付け形を変えるときは pr-mode.sh も揃える
 #
 # 状態ファイル: ${TMPDIR:-/tmp}/claude-verify-gate-<session_id>（1 行 1 カテゴリ）
 #
@@ -54,8 +57,22 @@ command -v jq >/dev/null 2>&1 || exit 0
 
 input=$(cat)
 [ -n "$input" ] || exit 0
-event=$(printf '%s' "$input" | jq -r '.hook_event_name // ""') || exit 0
-session=$(printf '%s' "$input" | jq -r '.session_id // ""') || exit 0
+# 入力 JSON の解析は 1 回だけ。使う全フィールドを @sh で引用した 1 行にして位置パラメータに展開する
+# （tool_response.stdout は改行を含むが、@sh の単一引用符の中で保たれる。無いフィールドは空文字。
+#   tool_input / tool_response がオブジェクトでない入力でもエラーにせず空文字にする: 1 回の解析で全イベント分を
+#   取るので、Stop の入力に壊れた tool_input があっても続行指示が出なくなってはいけない）
+fields=$(printf '%s' "$input" | jq -r '
+  (.tool_input | if type == "object" then . else {} end) as $ti
+  | [ (.hook_event_name // ""),
+      (.session_id // ""),
+      (.tool_name // ""),
+      ($ti.file_path // $ti.notebook_path // ""),
+      ($ti.command // ""),
+      (.tool_response | if type == "object" then (.stdout // "") elif type == "string" then . else "" end),
+      (.stop_hook_active // false) ]
+  | map(tostring) | @sh') || exit 0
+eval "set -- $fields" || exit 0
+event="$1" session="$2" tool="$3" f="$4" cmd="$5" out="$6" active="$7"
 # 状態ファイル名に使うので、パス区切り等を含む session_id は扱わない
 [[ "$session" =~ ^[A-Za-z0-9._-]+$ ]] || exit 0
 
@@ -122,10 +139,8 @@ explain() {
 
 case "$event" in
   PostToolUse)
-    tool=$(printf '%s' "$input" | jq -r '.tool_name // ""') || exit 0
     case "$tool" in
       Edit | Write | NotebookEdit)
-        f=$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // ""') || exit 0
         [ -n "$f" ] || exit 0
         real=$(resolve "$f")
         cats=$(classify "$real")
@@ -137,8 +152,6 @@ EOF
         ;;
       Bash)
         [ -f "$STATE" ] || exit 0
-        cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""') || exit 0
-        out=$(printf '%s' "$input" | jq -r '.tool_response | if type == "object" then (.stdout // "") elif type == "string" then . else "" end') || exit 0
         case "$cmd" in
           *HOOKS_DIR=*) ;;
           *.claude/tests/run.sh*)
@@ -163,7 +176,6 @@ EOF
       names="${names:+${names}、}${c}"
     done <"$STATE"
     [ -n "$names" ] || exit 0
-    active=$(printf '%s' "$input" | jq -r '.stop_hook_active // false') || exit 0
     if [ "$active" = "true" ]; then
       msg="verify-gate: dotfiles の検証（${names}）が未実行のままターンを終了しました。変更は未検証です。次のターンで検証を実行させてください。
 ${pending}"

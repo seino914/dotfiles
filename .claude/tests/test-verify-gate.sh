@@ -263,5 +263,36 @@ if [ "$len" != empty ] && [ "$len" -gt 0 ] && [ "$len" -le 10000 ]; then ok=yes;
 report I02-ctx-length yes "$ok" "length=${len}"
 rm -f "$ST/claude-verify-gate-$S4" "$ST/claude-verify-gate-$S5"
 
+echo "# J. tool_input / tool_response がオブジェクトでない入力（1 回の jq をエラーにせず、旧挙動どおり動く）"
+S6=test-vg-6-$$
+edit "$S6" Edit "$W/repo/.claude/hooks/x.sh" >/dev/null
+report J00-recorded run.sh "$(state_of "$S6")" ""
+# Stop の入力に文字列・配列の tool_input や数値の tool_response が付いていても続行指示を出す
+out=$(jq -cn --arg s "$S6" '{hook_event_name:"Stop",session_id:$s,stop_hook_active:false,tool_input:"garbage"}' | hook); rc=$?
+report J01-stop-str-tool-input-rc 0 "$rc" ""
+report J01-stop-str-tool-input yes "$(has "$(jget "$out" '.hookSpecificOutput.additionalContext // ""')" 'run.sh')" "$out"
+out=$(jq -cn --arg s "$S6" '{hook_event_name:"Stop",session_id:$s,stop_hook_active:false,tool_input:[1,2],tool_response:7}' | hook)
+report J02-stop-array-tool-input yes "$(has "$(jget "$out" '.hookSpecificOutput.additionalContext // ""')" 'run.sh')" "$out"
+out=$(jq -cn --arg s "$S6" '{hook_event_name:"Stop",session_id:$s,stop_hook_active:true,tool_input:null,tool_response:null}' | hook)
+report J03-stop-null-active-sysmsg yes "$(has "$(jget "$out" '.systemMessage // ""')" '未実行のまま')" "$out"
+# PostToolUse(Edit) で tool_input が文字列 → 記録せず、出力なし・exit 0
+rm -f "$ST/claude-verify-gate-$S6"
+out=$(jq -cn --arg s "$S6" '{hook_event_name:"PostToolUse",session_id:$s,tool_name:"Edit",tool_input:"x"}' | hook); rc=$?
+report J04-edit-str-tool-input-rc 0 "$rc" ""
+report J05-edit-str-tool-input-out "" "$out" "$out"
+report J06-edit-str-tool-input-state none "$(state_of "$S6")" ""
+# PostToolUse(Bash) で tool_response が数値・配列、tool_input が文字列 → 解除しない・落ちない
+edit "$S6" Edit "$W/repo/.claude/hooks/x.sh" >/dev/null
+jq -cn --arg s "$S6" '{hook_event_name:"PostToolUse",session_id:$s,tool_name:"Bash",tool_input:{command:"bash .claude/tests/run.sh"},tool_response:42}' | hook >/dev/null
+report J07-bash-num-tool-response run.sh "$(state_of "$S6")" ""
+jq -cn --arg s "$S6" '{hook_event_name:"PostToolUse",session_id:$s,tool_name:"Bash",tool_input:{command:"bash .claude/tests/run.sh"},tool_response:["すべて通過"]}' | hook >/dev/null
+report J08-bash-array-tool-response run.sh "$(state_of "$S6")" ""
+jq -cn --arg s "$S6" '{hook_event_name:"PostToolUse",session_id:$s,tool_name:"Bash",tool_input:"bash .claude/tests/run.sh",tool_response:{stdout:"すべて通過"}}' | hook >/dev/null
+report J09-bash-str-tool-input run.sh "$(state_of "$S6")" ""
+# 正常な形に戻れば解除される
+bashrun "$S6" 'bash .claude/tests/run.sh' "$RUN_OK" >/dev/null
+report J10-cleared none "$(state_of "$S6")" ""
+rm -f "$ST/claude-verify-gate-$S6"
+
 cleanup
 summary "verify-gate.sh"

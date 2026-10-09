@@ -12,7 +12,7 @@ S_OTHER=test-prmode-other-$$
 # テスト中だけ HOME を一時ディレクトリに向ける（フックは HOME をログの場所にしか使わない。run.sh がテスト前後の行数で検査する）
 export HOME="$T/claude-prmode-home.$$"
 mkdir -p "$HOME/.claude"
-cleanup() { rm -f "$T"/claude-pr-mode-test-prmode-*-$$; rm -rf "$T"/claude-prmode-test-repo-*.$$ "$T"/claude-prmode-libless.$$ "$T"/claude-prmode-home.$$; }
+cleanup() { rm -f "$T"/claude-pr-mode-test-prmode-*-$$; rm -rf "$T"/claude-prmode-test-repo-*.$$ "$T"/claude-prmode-libless.$$ "$T"/claude-prmode-home.$$ "$T"/claude-prmode-vgtmp.$$; }
 trap cleanup EXIT
 cleanup
 mkdir -p "$HOME/.claude"
@@ -32,6 +32,8 @@ HD_COMMIT=$'git commit -m "$(cat <<\'EOF\'\nfeat: x\n\n- a && b\n\nCo-Authored-B
 HD_DASH=$'git commit -F - <<-EOF\n\tmsg && x\n\tEOF'
 HD_TRAIL=$'git commit -m "$(cat <<\'EOF\'\nmsg\nEOF\n)" && rm -rf ~/x'
 HD_TRAIL2=$'git commit -m "$(cat <<\'EOF\'\nmsg\nEOF\n)"\nrm -rf ~/x'
+HD_EDIT=$'gh pr edit 16 --title "t" --body "$(cat <<\'EOF\'\n## 概要\n- a && b || c; d | e\n- --force と -f を含む本文\nEOF\n)"'
+HD_EDIT_TRAIL=$'gh pr edit 16 --body "$(cat <<\'EOF\'\nbody\nEOF\n)"\ngh pr merge 16'
 
 echo "# A. /pr 中の自動許可（allow）"
 pr A01 allow "$S_ON" 'git commit -m "fix: x"'
@@ -52,6 +54,11 @@ pr A15 allow "$S_ON" 'git push -u origin feat/x 2>&1'
 pr A16 allow "$S_ON" 'git commit -am "x"'
 pr A17 allow "$S_ON" 'git push --set-upstream origin feat/x'
 pr A18 allow "$S_ON" $'gh pr create --title "t" --body "$(cat <<\'END-OF-BODY\'\nbody\nEND-OF-BODY\n)"'
+echo "#   既存 PR の更新（gh pr edit。gh pr create と同じ扱い）"
+pr A19 allow "$S_ON" "$HD_EDIT"
+pr A20 allow "$S_ON" 'gh pr edit 16 --title "t" --body "b"'
+pr A21 allow "$S_ON" 'gh pr edit --title t --body-file /tmp/body.md'
+pr A22 allow "$S_ON" 'gh pr edit 16 --body "a && b; c | d > e" 2>&1'
 
 echo "# B. /pr 中でも確認ダイアログに落とす（none）"
 pr B01 none "$S_ON" "$HD_TRAIL"
@@ -92,6 +99,30 @@ pr B48 allow "$S_ON" 'git push origin feat/main-fix'
 echo "#   別リポジトリへの PR 作成"
 pr B49 none "$S_ON" 'gh pr create -R other/repo --title t --body b'
 pr B4A none "$S_ON" 'gh pr create --repo other/repo --fill'
+echo "#   gh pr edit: 別リポジトリ宛・複合・引用符付きオプションは自動承認しない"
+pr B4B none "$S_ON" 'gh pr edit 16 -R other/repo --title t'
+pr B4C none "$S_ON" 'gh pr edit 16 --repo=other/repo --body b'
+pr B4D none "$S_ON" 'gh pr edit 16 --title t && gh pr merge 16'
+pr B4E none "$S_ON" "$HD_EDIT_TRAIL"
+pr B4F none "$S_ON" 'gh pr edit 16 --title "$(rm -rf ~/x)"'
+pr B4G none "$S_ON" 'gh pr edit 16 "-R" other/repo --title t'
+pr B4H none "$S_ON" 'gh pr edit 16 --title t > /tmp/out'
+echo "#   gh pr edit: 位置引数で別リポジトリの PR を指す形（URL / OWNER/REPO#番号）と -R の値連結は自動承認しない"
+pr B4I none "$S_ON" 'gh pr edit https://github.com/other/repo/pull/1 --title x'
+pr B4J none "$S_ON" 'gh pr edit other/repo#1 --title x'
+pr B4K none "$S_ON" 'gh pr edit "other/repo#1" --title x'
+pr B4L none "$S_ON" 'gh pr edit --title x other/repo#1'
+pr B4M none "$S_ON" 'gh pr edit --title=x other/repo#1'
+pr B4N none "$S_ON" 'gh pr edit 16 --title "t" https://github.com/o/r/pull/1'
+pr B4O none "$S_ON" 'gh pr edit -Rother/repo 16 --title x'
+pr B4P none "$S_ON" 'gh pr create -Rother/repo --fill'
+pr B4P2 none "$S_ON" 'gh pr edit --remove-milestone other/repo#1'
+echo "#   gh pr edit: オプションの値（タイトル・本文・HEREDOC）の # や URL、ブランチ名の / では落とさない"
+pr B4Q allow "$S_ON" 'gh pr edit 16 --title "fix #1 (https://example.com/a)" --body "see #2"'
+pr B4R allow "$S_ON" 'gh pr edit feature/x --title t'
+pr B4S allow "$S_ON" $'gh pr edit 16 --title "t" --body "$(cat <<\'EOF\'\n## 概要 #1 https://example.com/x\n- a && b\nEOF\n)"'
+pr B4T allow "$S_ON" 'gh pr edit 16 --body-file /tmp/body.md --title t'
+pr B4U allow "$S_ON" 'gh pr edit --title "#1" --body "x"'
 echo "#   引用符付きオプション・変数入りの宛先"
 pr B70 none "$S_ON" 'git push origin "main"'
 pr B71 none "$S_ON" 'git commit -m x "--amend"'
@@ -129,6 +160,9 @@ pr B58 none "$S_ON" $'git push origin "$(cat <<\'EOF\'\nfeat\nEOF\n)" main'
 pr B59 allow "$S_ON" $'git commit -m "$(cat <<\'EOF\'\nmsg\nEOF\n)" --no-edit'
 echo "#   対象外のコマンド"
 pr B60 none "$S_ON" 'gh pr merge 1'
+pr B60b none "$S_ON" 'gh pr comment 1 --body x'
+pr B60c none "$S_ON" 'gh pr close 1'
+pr B60d none "$S_ON" 'gh pr editx 1'
 pr B61 none "$S_ON" 'git commit-tree HEAD^{tree} -m x'
 pr B62 none "$S_ON" 'git pushx'
 pr B63 none "$S_ON" 'ls'
@@ -169,6 +203,30 @@ pre C2B deny "$S_OFF" '\git commit -m x'
 pre C2C deny "$S_OFF" '\git push --force'
 pre C2D deny "$S_OFF" '\gh pr create --title x'
 pre C2E deny "$S_OFF" 'command \git commit -m x'
+echo "#   既存 PR の更新（gh pr edit）も /pr 外では拒否する（gh pr create と同じ捕捉）"
+pre C2F deny "$S_OFF" 'gh pr edit 16 --title x'
+pre C2G deny "$S_OFF" "$HD_EDIT"
+pre C2H deny "$S_OFF" 'gh pr edit 16 --body-file b.md;'
+pre C2I deny "$S_OFF" '(gh pr edit 16 --title x)'
+pre C2J deny "$S_OFF" 'gh pr view 16 --json title && gh pr edit 16 --title x'
+pre C2K deny "$S_OFF" $'gh pr view 16\ngh pr edit 16 --title x'
+pre C2L deny "$S_OFF" '\gh pr edit 16 --title x'
+pre C2M deny "$S_OFF" 'command gh pr edit 16 --title x'
+pre C2N deny "$S_OFF" 'env GH_TOKEN=x gh pr edit 16 --title x'
+pre C2O deny "$S_OFF" '/opt/homebrew/bin/gh pr edit 16 --title x'
+pre C2P deny "$S_OFF" 'bash -c "gh pr edit 16 --title x"'
+pre C2Q deny "$S_OFF" 'eval "gh pr edit 16 --title x"'
+pre C2R deny "$S_OFF" 'gh  pr  edit 16 --title x'
+pre C2S deny "$S_OFF" 'gh pr edit 16 --title x 2>&1 | tail -1'
+echo "#   gh api で /pulls/<番号> を更新する形も拒否する"
+pre C2U deny "$S_OFF" 'gh api -X PATCH repos/o/r/pulls/16 -f title=x'
+pre C2V deny "$S_OFF" 'gh api --method PATCH repos/o/r/pulls/16 --input b.json'
+pre C2W deny "$S_OFF" 'gh api repos/o/r/pulls/16 -f title=x'
+pre C2X deny "$S_OFF" 'gh api -X PUT repos/o/r/pulls/16'
+pre C2Y deny "$S_OFF" 'gh api --method=PATCH /repos/o/r/pulls/16 -F state=closed'
+# deny の理由文は PR の更新も対象に含むことが分かる文言になっている
+out=$(run_hook "$HOOK" PreToolUse "$S_OFF" 'gh pr edit 16 --title x'); case "$out" in *'PR の作成・更新'*'/pr'*) r=ok ;; *) r="理由文が一致しない: $out" ;; esac
+report C2T-deny-reason-mentions-edit ok "$r" ""
 echo "#   無害なコマンドは拒否しない（none）"
 pre C60 none "$S_OFF" 'gh api repos/o/r/pulls/1/comments'
 pre C61 none "$S_OFF" 'gh api repos/o/r/pulls --jq .[].number'
@@ -178,6 +236,18 @@ pre C64 none "$S_OFF" 'python eval.py && git log --grep "git push"'
 pre C65 none "$S_OFF" 'gh pr comment 1 --body "git push 済み"'
 pre C66 none "$S_OFF" 'ssh -c aes256-ctr host "git push"'
 pre C67 none "$S_OFF" 'grep -rn createPullRequest .claude/hooks/'   # gh api / graphql の文脈にない語は拒否しない
+pre C68 none "$S_OFF" 'git log --grep "gh pr edit" --oneline'
+pre C69 none "$S_OFF" 'gh pr comment 1 --body "gh pr edit で更新済み"'
+pre C6A none "$S_OFF" 'echo "gh pr edit"'
+pre C6B none "$S_OFF" 'gh pr view 16 --json commits --jq ".commits[].messageHeadline"'
+echo "#   gh api の /pulls/<番号> の GET と、サブリソース（comments / reviews / files）への書き込みは拒否しない"
+pre C6C none "$S_OFF" 'gh api repos/o/r/pulls/16'
+pre C6D none "$S_OFF" 'gh api repos/o/r/pulls/16 --jq .title'
+pre C6E none "$S_OFF" 'gh api repos/o/r/pulls/16 -X GET -f per_page=1'
+pre C6F none "$S_OFF" 'gh api repos/o/r/pulls/16/comments -f body=LGTM'
+pre C6G none "$S_OFF" 'gh api -X POST repos/o/r/pulls/16/reviews -f event=APPROVE'
+pre C6H none "$S_OFF" 'gh api repos/o/r/pulls/16/files'
+
 echo "#   区切りなしリダイレクト・HEREDOC / パイプでシェルに流す形・閉じない HEREDOC"
 pre C70 deny "$S_OFF" 'git push>/dev/null'
 pre C71 deny "$S_OFF" $'bash <<\'EOF\'\ngit push origin main\nEOF'
@@ -209,6 +279,7 @@ pre C40 none "$S_ON" 'git commit -m x'
 echo "#   PermissionRequest 側の deny（二重化）"
 pr C50 deny "$S_OFF" 'git commit -m x'
 pr C51 none "$S_OFF" 'git status'
+pr C52 deny "$S_OFF" 'gh pr edit 16 --title x'
 
 echo "# D. フラグの寿命"
 S=test-prmode-life-$$
@@ -236,6 +307,58 @@ run_hook "$HOOK" UserPromptExpansion "$S" "" pr >/dev/null
 run_hook "$HOOK" UserPromptSubmit "$S" "" "" "/prune してほしい" >/dev/null; [ -f "$F" ] && r=yes || r=no; report D07-submit-/prune no "$r" ""
 run_hook "$HOOK" UserPromptExpansion "$S" "" pr >/dev/null
 run_hook "$HOOK" Stop "$S" >/dev/null;                            [ -f "$F" ] && r=yes || r=no; report D08-stop no "$r" ""
+echo "#   Stop と verify-gate の連携: verify-gate がこの Stop でターンを続行させるときだけフラグを残す"
+# TMPDIR を一時ディレクトリに向け、フラグと verify-gate の状態ファイル（claude-verify-gate-<session>）を実環境から隔離する
+VGT="$T/claude-prmode-vgtmp.$$"; rm -rf "$VGT"; mkdir -p "$VGT"
+# Stop を stop_hook_active 付きで送る: session active(true/false/omit)
+stop_vg() {
+  if [ "$2" = omit ]; then jq -cn --arg s "$1" '{hook_event_name:"Stop",session_id:$s}'
+  else jq -cn --arg s "$1" --argjson a "$2" '{hook_event_name:"Stop",session_id:$s,stop_hook_active:$a}'; fi \
+    | TMPDIR="$VGT" bash "$HOOK" 2>/dev/null
+}
+FV="$VGT/claude-pr-mode-$S"; VGS="$VGT/claude-verify-gate-$S"
+touch "$FV"; printf 'run.sh\n' >"$VGS"; stop_vg "$S" false >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D10-stop-vg-pending-keeps yes "$r" ""
+# 続行後に別のプロンプトが来れば（/pr 以外の UserPromptSubmit）残ったフラグは消える
+TMPDIR="$VGT" run_hook "$HOOK" UserPromptSubmit "$S" "" "" "別の作業をして" >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D11-leftover-cleared-by-submit no "$r" ""
+touch "$FV"; printf 'run.sh\n' >"$VGS"; stop_vg "$S" true >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D12-stop-vg-active-removes no "$r" ""
+touch "$FV"; rm -f "$VGS"; stop_vg "$S" false >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D13-stop-no-vg-state-removes no "$r" ""
+touch "$FV"; : >"$VGS"; stop_vg "$S" false >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D14-stop-empty-vg-state-removes no "$r" ""
+# 空行だけの状態ファイルは verify-gate が続行させない（空行を捨てて何も残らない）ので消す
+touch "$FV"; printf '\n\n' >"$VGS"; stop_vg "$S" false >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D14b-stop-blank-lines-vg-state-removes no "$r" ""
+# stop_hook_active が無い入力は verify-gate と同じく false 扱い（続行させる側）なのでフラグを残す
+touch "$FV"; printf 'run.sh\n' >"$VGS"; stop_vg "$S" omit >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D15-stop-vg-no-active-field-keeps yes "$r" ""
+# verify-gate が受け付けない session_id（^[A-Za-z0-9._-]+$ 以外）では verify-gate は続行させないので従来どおり消す
+SB="test-prmode-bad@$$"; FB="$VGT/claude-pr-mode-$SB"
+touch "$FB"; printf 'run.sh\n' >"$VGT/claude-verify-gate-$SB"; stop_vg "$SB" false >/dev/null; [ -f "$FB" ] && r=yes || r=no; report D16-stop-bad-session-removes no "$r" ""
+# 他セッションの状態ファイルでは残らない
+touch "$FV"; rm -f "$VGS"; printf 'run.sh\n' >"$VGT/claude-verify-gate-$S_OTHER"; stop_vg "$S" false >/dev/null; [ -f "$FV" ] && r=yes || r=no; report D17-stop-other-session-vg-state-removes no "$r" ""
+echo "#   連携の機構的な固定: verify-gate.sh と pr-mode.sh を同じ入力で動かし「verify-gate が続行指示を出す ⇔ pr-mode がフラグを残す」を比較する"
+VG="$HOOKS_DIR/verify-gate.sh"
+# linked label 状態ファイルの中身（ABSENT なら無し） stop_hook_active（true/false/omit） 期待（continue/stop）
+linked() {
+  local label="$1" st="$2" act="$3" expect="$4" json vgout cont kept
+  rm -f "$VGS"; [ "$st" = ABSENT ] || printf '%s' "$st" >"$VGS"
+  touch "$FV"
+  if [ "$act" = omit ]; then json=$(jq -cn --arg s "$S" '{hook_event_name:"Stop",session_id:$s,last_assistant_message:"x"}')
+  else json=$(jq -cn --arg s "$S" --argjson a "$act" '{hook_event_name:"Stop",session_id:$s,stop_hook_active:$a,last_assistant_message:"x"}'); fi
+  vgout=$(printf '%s' "$json" | TMPDIR="$VGT" bash "$VG" 2>/dev/null)
+  case "$vgout" in *'"additionalContext"'*) cont=continue ;; *) cont=stop ;; esac
+  printf '%s' "$json" | TMPDIR="$VGT" bash "$HOOK" >/dev/null 2>&1
+  [ -f "$FV" ] && kept=continue || kept=stop
+  report "$label-expected" "$expect" "$cont" "verify-gate の判定が想定と違う: $vgout"
+  report "$label-linked" "$cont" "$kept" "verify-gate=${cont} pr-mode フラグ=${kept}"
+}
+linked D20-linked-pending-false $'run.sh\n' false continue
+linked D21-linked-pending-true $'run.sh\n' true stop
+linked D22-linked-pending-omit $'run.sh\n' omit continue
+linked D23-linked-blank-lines $'\n\n' false stop
+linked D24-linked-empty-file '' false stop
+linked D25-linked-absent ABSENT false stop
+linked D26-linked-two-cats $'run.sh\nnix eval\n' false continue
+linked D27-linked-blank-then-cat $'\n\nnix eval\n' false continue
+linked D28-linked-no-trailing-newline 'run.sh' false stop   # read ループは改行で終わらない最終行を読まない（両者で同じ）
+linked D29-linked-spaces-line $' \n' false continue          # 空白だけの行は「空でない行」（両者で同じ）
+rm -rf "$VGT"
 # 別セッションのフラグは効かない
 run_hook "$HOOK" UserPromptExpansion "$S" "" pr >/dev/null
 pr D09-other-session deny "$S_OTHER" 'git commit -m x'

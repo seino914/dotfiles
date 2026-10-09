@@ -31,6 +31,7 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
       "Bash(gh pr merge:*)",
       "Bash(brew install:*)",
       "Bash(brew reinstall:*)",
