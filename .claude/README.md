@@ -8,7 +8,7 @@
 
 | ファイル | 役割 |
 | :--- | :--- |
-| `settings.json` | Claude Code の設定（フック・言語・effortLevel・permissions など） |
+| `settings.json` | Claude Code の設定（フック・言語・model・effortLevel・permissions・autoMode など） |
 | `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・変更後の検証・秘密情報・パッケージインストールの制限・モデル運用ポリシー） |
 | `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は dotfiles 同梱の `claude-notify/send-push.mjs`、受信側PWAは claude-notify-mobile リポジトリ） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成を自動許可し、それ以外は実行前に拒否するフック |
@@ -16,6 +16,7 @@
 | `hooks/validate-claude-config.sh` | `~/.claude` 配下の設定ファイル編集直後にJSON構文・シェル構文・frontmatterを検証するフック |
 | `hooks/lib/strip-shell.awk` | シェルコマンド文字列から引用符の中身とHEREDOC本文を除去する共通ライブラリ（pr-mode.sh・guard-destructive.shが利用） |
 | `dev-roots` | Claude Code が確認なしで削除・移動できる作業ルートの**唯一の定義**（1行1パス、`~/` 始まり、`#` から行末はコメント、前後の空白と末尾の `/` は無視、`~/` 始まり以外の行は読まれない）。`hooks/guard-destructive.sh`・`nix/home.nix`（`devDirs`）・`tests/test-guard-destructive.sh` が同じ読み方で読む。変更したら `git add` すること（flakeはgit追跡ファイルしか読まない） |
+| `agents/Explore.md` | 組み込みの Explore サブエージェントを同名のユーザー定義で上書きし、`model: haiku` に固定する（組み込みはメインのモデルを継承するため）。読み取り専用（`disallowedTools: Agent, Edit, Write, NotebookEdit`）で `omitClaudeMd: true`。呼び出し時に `model` を渡せばそちらが優先される |
 | `skills/readme/SKILL.md` | `/readme` スキル：READMEを最新状態に更新（なければ新規作成）。`model: sonnet` でそのターンのみSonnetに切り替える |
 | `skills/pr/SKILL.md` | `/pr` スキル：変更をコミット・pushしてGitHubにPRを作成。`disable-model-invocation: true` でユーザー起動限定 |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：ローカルブランチのうちデフォルトブランチ・使用中のブランチ以外を削除して整理（未マージは確認後のみ）。`model: sonnet` でそのターンのみSonnetに切り替える |
@@ -35,7 +36,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - **ファイルを追加したら再実行するだけ**でリンクされる（スクリプトの修正は不要）
 - `skills/` や `commands/` などのディレクトリを作れば、そのまま `~/.claude` 配下に反映され、全プロジェクトで使える
 - リポジトリから削除・除外されたファイルの切れたリンク（旧パスを指すものを含む）は、再実行時に自動で掃除される
-- `setup.sh`・`README.md`・`claude-notify.example.json`・`tests/`（フックのテスト。配布不要）・`claude-notify.json`・`settings.local.json`（秘密鍵・プロジェクト固有設定）・エディタの一時ファイルやバックアップ（`*.swp`・`*~`・`*.backup.*` 等）はリンク対象外
+- `setup.sh`・`README.md`・`claude-notify.example.json`・`tests/`（フックのテスト。配布不要）・`claude-notify.json`・`settings.local.json`（秘密鍵・プロジェクト固有設定）・エディタの一時ファイルやバックアップ（`*.swp`・`*~`・`*.backup.*`・`*.bak` 等）はリンク対象外
 - 既に正しいリンクが張られているファイルには触らない（冪等。inodeを変えないので `switch` 中にリンクが一瞬消える窓もできない）
 - 1ファイルの失敗で処理は止まらない。失敗はまとめて末尾に表示され、スクリプトは非ゼロで終了する
 
@@ -52,11 +53,15 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 
 - `permissions.deny`：`~/.claude/claude-notify.json`・`~/.claude/history.jsonl` に加え、SSH秘密鍵・AWS認証情報・`gh` の hosts.yml・Docker設定・`.netrc`・GPG鍵・kubeconfig・`.npmrc`・主要な `.env` 変種（`.env.example` は除く。一覧は settings.json）などの秘密ファイルの読み取りと `sudo` の実行を禁止（詳細は settings.json）
 - `permissions.ask`：`git commit` / `git push` / `gh pr create` / `gh pr merge` に加え、`brew install` 系・`npm install -g` 系・`pip install --user`・`pipx`・`uv tool install`・`cargo` / `gem` / `go install`・`nix profile` / `nix-env`・`darwin-rebuild`・`home-manager` など、プロジェクト外へ恒久的な変更を及ぼすコマンドを実行前に必ず確認（詳細は settings.json）
-- `env.CLAUDE_CODE_SUBAGENT_MODEL`：`opus`（サブエージェントの既定モデル。定型作業は `sonnet` / `haiku` を明示して落とす。組み込みの Explore / Plan には効かない）
+- `env.CLAUDE_CODE_SUBAGENT_MODEL`：`opus`（サブエージェントの既定モデル。定型作業は `sonnet` / `haiku` を明示して落とす。組み込みの Explore は `agents/Explore.md` で Haiku に固定、Plan はメイン（Opus）を継承する）
 - `hooks`：`UserPromptExpansion` / `UserPromptSubmit` / `PreToolUse`(Bash) / `PermissionRequest`(Bash) / `Stop` で `hooks/pr-mode.sh`、`PreToolUse`(Bash) で `hooks/guard-destructive.sh`、`PostToolUse`(Edit|Write|NotebookEdit) で `hooks/validate-claude-config.sh`、`Stop` / `Notification`(matcher: `permission_prompt`) で `hooks/notify.sh`
-- `model`：`claude-fable-5-1`
+- `model`：`opus`（エイリアス。現在は Opus 5.5 に解決され、新しい Opus が出れば自動で追従する。Fable は Opus で解けない・難しい作業に限り、`model: "fable"` のサブエージェントへ切り出すか、セッション単位で `/model` から選ぶ運用。方針は `CLAUDE.md` のモデル運用ポリシー）
+- `modelSettings`：モデルごとの `effortLevel`（`claude-opus-5-5` / `claude-fable-5-1` / `claude-sonnet-5-5` / `claude-haiku-5-5` をすべて `high` にしている）。v2.1.251 以降 `/effort` はモデル別に `modelSettings` へ保存され、Opus 5.5 以降のモデルはトップレベルの `effortLevel` を無視して既定の medium で動くため、モデルごとに持つ必要がある。**新しいモデル（`opus` の解決先が変わったとき等）が出たら、`/effort high` を一度実行するか `modelSettings` に追記しないと medium で動く**
 - `language`：`japanese`
-- `effortLevel`：`/effort` や `/config` で Claude Code 自身が書き換えるため、このREADMEには現在値を転記しない（実際の値は settings.json を参照。差分はコミットするだけでよい）
+- `effortLevel`：`/effort` や `/config` で Claude Code 自身が書き換えるため、このREADMEには現在値を転記しない（実際の値は settings.json を参照。差分はコミットするだけでよい）。トップレベルの値は Fable 5.1 以前向けで、Opus 5.5 以降には効かない（上の `modelSettings` を参照）
+- `permissions.defaultMode`：`auto`（v2.1.283 以降は未設定でも auto 起動だが、方針として明示している。VSCode 拡張は `claudeCode.initialPermissionMode` 未設定なら「最後に選んだモード → この値」の順で起動モードを決める。`initialPermissionMode` は `auto` を受け付けないので設定しないこと）。内容を指定した `permissions.ask` ルール（git commit 等）とフックの ask / deny は auto mode でも効くので、/pr フローの四層構造は変わらない
+- `autoMode.environment`：auto mode の分類器に環境を自然文で伝える。`"$defaults"` に加え、github.com/seino914/* を信頼できる push・PR 作成先、`dev-roots` の 3 ルートを作業ルート、Nix による宣言管理と `~/.claude` のリンク構成、を渡している。**`"$defaults"` を外すと組み込みの既定が丸ごと置き換わるので外さない**
+- Orca のフックと `statusLine`：外部のエージェント管理アプリ Orca（`~/.orca/agent-hooks/`）が書き込んだもので、12 イベント（`UserPromptSubmit` / `PreToolUse`(*) / `PermissionRequest`(*) / `PostToolUse`(*) / `Stop` / `SessionStart` / `StopFailure` / `SubagentStart` / `SubagentStop` / `TeammateIdle` / `PostToolUseFailure` / `PostCompact`）の `hooks` と `statusLine` に入っている（コマンドに `orca` を含むエントリ）。Orca 内で起動したときだけ Orca アプリへイベントを送り、Orca 外では何もせず `{}` を返して終わる（権限判定には関与しない）。Orca が書き換えるので手で編集しない。Orca が settings.json を書き換える前に作る `settings.json.bak` は `.gitignore` と `setup.sh` で除外してある
 - `tui`：`fullscreen`
 - `agentPushNotifEnabled`：`true`（Remote Control接続時にClaudeの判断でスマホへプッシュ通知する公式機能。claude-notifyとは別系統）
 

@@ -6,7 +6,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 
 - `flake.nix` + `nix/` — nix-darwin + home-manager + nix-homebrew によるmacOS環境全体の宣言管理。`bootstrap.sh` が新Macの1コマンドセットアップ
 - `vscode/` — VSCode / Cursor 共通設定の実体。書き込み可能リンクで両エディタへ配る（詳細 `vscode/README.md`）
-- `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills・dev-roots・tests。一覧は `.claude/README.md`）
+- `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills・agents・dev-roots・tests。一覧は `.claude/README.md`）
 - `zsh/.zshrc` — プロンプト表示と direnv フック（**このPCでは未適用**。詳細は `zsh/README.md`）
 - `claude-notify/` — iPhoneへのWeb Push通知の送信側スクリプト（受信側PWAは別リポジトリ `claude-notify-mobile`）
 - `.github/workflows/` — 他リポジトリへコピーして使う配布用テンプレート。ただし `delete-merged-branch.yml` は**このリポジトリ自身のPRにも発火する**
@@ -41,6 +41,8 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `.claude/` 配下にファイルを追加・削除したら `bash .claude/setup.sh` を再実行する（冪等。`darwin-rebuild switch` 時にも自動実行）。VSCode/Cursor設定はUIから変更すれば即リポジトリに反映され、拡張機能の追加導入のみ `switch` が要る
 - `setup.sh` はgitが管理するファイル（追跡済み＋未追跡かつ`.gitignore`対象外）だけを配布する。`.claude/tests/` はリンク対象外（`~/.claude` には配られない）
 - **削除の許可ルートの定義は `.claude/dev-roots` だけ**（1行1パス、`~/` 始まり、`#` から行末はコメント、前後の空白と末尾の `/` は無視。読む側3つは同じ読み方をする。現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）。読む側は `guard-destructive.sh`（`ALLOWED_ROOTS` と理由文の表示）・`nix/home.nix`（`devDirs` を導出して activation で `mkdir`）・`tests/test-guard-destructive.sh`（DR1〜DR3）の3つ。変更したら **`git add .claude/dev-roots`**（flakeはgit追跡ファイルしか読まない）と **`nix eval`**、`bash .claude/tests/run.sh`、`bash .claude/setup.sh` を通す
+- `.claude/settings.json` の Orca 由来のフック・`statusLine`（コマンドに `orca` を含むもの）は外部アプリ Orca が書き込むもので、手で編集しない。Orca 内で起動したときだけ動き、Orca 外では何もしない
+- 新しいモデルが出たら `modelSettings` にそのモデルの `effortLevel` を足す（v2.1.251 以降 `/effort` はモデル別に保存され、Opus 5.5 以降はトップレベルの `effortLevel` を無視して medium で動くため）。`model` が `opus` エイリアスなので、解決先が変わったときも同様
 - 適用・更新・配布のコマンドは `README.md` の「コマンド」参照
 
 ## 変更後の検証（Claude Codeが自分で実行する。sudo不要）
