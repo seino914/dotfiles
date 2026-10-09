@@ -169,17 +169,9 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - 検証コマンドの判定はコマンド文字列と出力の部分一致なので、別のチェックアウトの `run.sh` を実行しても解除される。並列のツール呼び出しで状態ファイルが競合すると、まれに記録が欠けうる（ロックはしない）
 - `Stop` では `notify.sh` も並行して動くため、続行を促した場合も「完了」通知が先に飛ぶことがある
 
-## 公式プラグイン security-guidance（導入手順と設定方法）
+## 公式プラグイン security-guidance（不採用）
 
-`security-guidance@claude-plugins-official` は**未導入**。Claude からの導入は auto mode の分類器に自己改変として止められたため、ユーザーが自分で導入する。
-
-1. Claude Code で `/plugin install security-guidance@claude-plugins-official` を**ユーザースコープ**で実行する
-2. 導入されると `settings.json` の `enabledPlugins` に記録されるので、`git diff` で確認してコミットする
-
-導入後に環境変数で調整できる（`settings.json` の `env` などに置く）：
-
-- レビュー層のモデル：`SECURITY_REVIEW_MODEL`（ターン末レビュー）と `SG_AGENTIC_MODEL`（コミット時レビュー）。既定は Opus 4.7
-- 層ごとの無効化：`ENABLE_PATTERN_RULES=0` / `ENABLE_STOP_REVIEW=0` / `ENABLE_COMMIT_REVIEW=0`
+`security-guidance@claude-plugins-official`（編集ごとの危険パターン検査・ターン末とコミット時のセキュリティレビュー）は**導入しない**（ユーザーの決定、2026-10-09）。秘密情報の書き込みは `hooks/guard-secrets.sh`、変更の正しさは `CLAUDE.md` の独立レビュー規則で扱う。
 
 ## 設定ファイルの自動検証
 
