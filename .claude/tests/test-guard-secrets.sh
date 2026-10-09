@@ -174,6 +174,27 @@ s P13 none Write "$R/a.txt" "-----BEGIN ""EXAMPLE PRIVATE KEY-----"
 s P14 none Write "$R/a.txt" "npm_$(rep a 7)$(rep b 29)"                   # 同じ文字の連続（b が 29 回）
 s P15 ask  Write "$R/a.txt" "npm_$(rep a 7)$(rep b 29)
 $GHP"                                                                       # プレースホルダと本物が混ざれば ask
+# プレースホルダ除外は件数の打ち切りより先にかける（先頭に例示キーが大量に並んでも、後ろの本物を見落とさない）
+EXK="AK""IAIOSFODNN7EXAMPLE"
+s P16 ask  Write "$R/a.txt" "$(rep "aws_access_key_id = $EXK
+" 30)token = $GHP"
+s P17 ask  Write "$R/a.txt" "$(rep "$EXK " 30)$AKIA"                       # 1 行に並んでいても同じ
+s P18 ask  Write "$R/a.txt" "$(rep "gh""p_$(rep x 36)
+" 25)$(rep "-----BEGIN ""EXAMPLE PRIVATE KEY----- " 25)
+$KEY_BARE"                                                                  # 例示の鍵ヘッダが 1 行に並んだ後ろの本物
+out=$(run_tool Write "$R/a.txt" "$(rep "$EXK
+" 25)$(i=0; while [ $i -lt 25 ]; do printf 'gh''p_%s%02d\n' "$(rep aB3 11)a" "$i"; i=$((i + 1)); done)
+$AKIA")
+reason_has   P19 "$out" 'AWS アクセスキー ID（AKIA…）'                        # 本物の GitHub トークンが 25 件並んでも後ろの種類を落とさない
+case "$(reason_of "$out")" in *'GitHub トークン'*'GitHub トークン'*) report P20-dedupe once twice "$(reason_of "$out")" ;; *) report P20-dedupe once once "" ;; esac
+s P21 none Write "$R/a.txt" "$(rep "$EXK
+" 3000)"                                                                    # 例示キーだけが大量にあっても通す
+# < や ... や * はトークンの文字ではないので、それ自体でプレースホルダになるのではなく、そもそもパターンに一致しない。
+# 本物の形のトークンの前後にあっても ask のまま
+s P22 ask  Write "$R/a.txt" "token=<$GHP>"
+s P23 ask  Write "$R/a.txt" "token=$GHP..."
+s P24 ask  Write "$R/a.txt" "token=${GHP}****"
+s P25 none Write "$R/a.txt" "token=gh""p_$(rep aB3 7)...$(rep aB3 5)"       # ... で分断されて長さが足りない
 
 echo "# none: 秘密ではない・短すぎる・パターン外"
 s X01 none Write "$R/a.ts" "export const hello = 'world';"
@@ -198,6 +219,36 @@ GITHUB_TOKEN に Personal Access Token（ghp_ で始まる）を設定してく�
 s X15 none Write "$R/a.txt" "x""gh""p_$(rep aB3 12)"                        # 直前が英数字なら拾わない（語中）
 s X16 ask  Write "$R/a.txt" "x
 $GHP"                                                                       # 行頭なら拾う
+TAB=$'\t'
+s X17 ask  Write "$R/a.txt" "x${TAB}$GHP"                                 # 直前がタブ
+s X18 none Write "$R/a.pem" "-----BEGIN${TAB}""RSA PRIVATE KEY-----"         # ヘッダの語の間がタブ（パターン外）
+s X19 ask  Write "$R/a.pem" "x-----BEGIN ""RSA PRIVATE KEY-----"           # ヘッダは直前の文字を問わない
+s X20 ask  Write "$R/a.pem" "-----BEGIN ""RSA PRIVATE KEY X PRIVATE KEY BLOCK-----"
+out=$(run_tool Write "$R/a.asc" "$KEY_PGP"); reason_has X21 "$out" '秘密鍵（-----BEGIN PGP PRIVATE KEY BLOCK-----）'
+
+echo "# 性能: 語中の sk- などを大量に含む大きな内容でも、遅い照合に進まず短時間で通す"
+# 数 MB の内容はコマンド引数の長さの上限を超えるので、ファイル経由で入力 JSON を組み立てる
+run_file() { # label expected file content-file → 判定を report し、所要ミリ秒を MS に入れる
+  local out rc t0 t1
+  t0=$EPOCHREALTIME
+  out=$(jq -cn --arg f "$3" --rawfile c "$4" '{hook_event_name:"PreToolUse",cwd:"/tmp",tool_name:"Write",tool_input:{file_path:$f,content:$c}}' \
+    | bash "$HOOK" 2>>"$ERRF"); rc=$?
+  t1=$EPOCHREALTIME
+  MS=$(( (${t1//[.,]/} - ${t0//[.,]/}) / 1000 ))
+  [ "$rc" -eq 0 ] || BAD_RC="$BAD_RC $1:rc=$rc"
+  report "$1" "$2" "$(decision_of "$out")" "$out"
+}
+awk 'BEGIN { printf "["; for (i = 1; i <= 90000; i++) printf "{\"id\":\"task-%d\",\"path\":\"/disk-%d\",\"mask-x\":1},", i, i; print "{}]" }' > "$W/tasks.json"
+run_file X22 none "$R/tasks.json" "$W/tasks.json"
+[ "$MS" -lt 2000 ] && report X23-fast "<2000ms" "<2000ms" "" || report X23-fast "<2000ms" "${MS}ms" "task- を大量に含む $(wc -c < "$W/tasks.json") バイトの内容に ${MS}ms かかった"
+printf 'token = %s\n' "$GHP" >> "$W/tasks.json"
+run_file X24 ask "$R/tasks.json" "$W/tasks.json"                            # 大量の task- の後ろにある本物は拾う
+awk 'BEGIN { for (i = 1; i <= 150000; i++) printf "AK" "IAIOSFODNN7EXAMPLE "; print "" }' > "$W/oneline.txt"
+run_file X25 none "$R/a.txt" "$W/oneline.txt"                               # 1 行に例示キーが大量に並ぶ（行長×件数の時間にならない）
+[ "$MS" -lt 3000 ] && report X26-fast "<3000ms" "<3000ms" "" || report X26-fast "<3000ms" "${MS}ms" "1 行に例示キー 15 万件で ${MS}ms かかった"
+awk 'BEGIN { for (i = 1; i <= 30000; i++) printf "-----BEGIN " "EXAMPLE PRIVATE KEY----- "; print "" }' > "$W/headers.txt"
+run_file X27 none "$R/a.txt" "$W/headers.txt"                               # 1 行に例示の鍵ヘッダが大量に並ぶ
+[ "$MS" -lt 3000 ] && report X28-fast "<3000ms" "<3000ms" "" || report X28-fast "<3000ms" "${MS}ms" "1 行に例示の鍵ヘッダ 3 万件で ${MS}ms かかった"
 
 echo "# ファイル自体がシンボリックリンク（~/.claude/settings.json → dotfiles の実体 と同じ形）: リンク先の実体で判定する"
 mkdir -p "$W/links" "$R/ignored"
@@ -228,6 +279,26 @@ out=$(run_raw "$(jq -cn --arg c "$GHP" '{tool_name:"Write",tool_input:{file_path
 out=$(run_raw "$(jq -cn --arg c "$GHP" '{tool_name:"Write",tool_input:"string",cwd:"/tmp"}')"); report J11-tool-input-string none "$(decision_of "$out")" "$out"
 out=$(jq -cn --arg f "$R/a.txt" --arg c "$GHP" '{tool_name:"Write",tool_input:{file_path:$f,content:$c}}' | PATH=/nonexistent "$BASH" "$HOOK" 2>>"$ERRF"); rc=$?
 report J12-no-jq none "$(decision_of "$out")" "$out"; [ "$rc" -eq 0 ] || BAD_RC="$BAD_RC J12:rc=$rc"
+
+echo "# 入力の解析（jq 1 回の @sh 出力を eval する）: 内容の任意の文字を壊さず、実行もしない"
+PW="$W/pwned"
+out=$(run_tool Write "$R/a.txt" "a='\$(touch $PW.1)' b=\`touch $PW.2\` c=\"\$HOME\" d=\\ e='\\''
+token = $GHP")
+report J13-shell-meta ask "$(decision_of "$out")" "$out"
+[ -e "$PW.1" ] || [ -e "$PW.2" ] && report J14-no-exec none ran "内容のコマンド置換が実行された" || report J14-no-exec none none ""
+out=$(run_raw "{\"tool_name\":\"Write\",\"cwd\":\"/tmp\",\"tool_input\":{\"file_path\":\"$R/a.txt\",\"content\":\"a\\u0000$GHP\"}}")
+report J15-nul-in-content ask "$(decision_of "$out")" "$out"                 # \u0000 は改行扱い（stderr にも何も出さない: Z02）
+out=$(jq -cn --arg f "$R/a.txt" '{tool_name:"Write",cwd:"/tmp",tool_input:{file_path:$f}}' \
+  | tool=Write content="$GHP" f="$R/a.txt" bash "$HOOK" 2>>"$ERRF")
+report J16-env-not-used none "$(decision_of "$out")" "$out"                  # 同名の環境変数を内容として使わない
+out=$(run_raw "$(jq -cn --arg f "$R/nb.ipynb" --arg c "$GHP" '{tool_name:"NotebookEdit",cwd:"/tmp",tool_input:{notebook_path:$f,new_source:$c}}')")
+report J17-notebook-path ask "$(decision_of "$out")" "$out"
+out=$(run_raw "$(jq -cn --arg c "$GHP" '{tool_name:"Write",cwd:"/tmp",tool_input:{file_path:"a.txt",content:$c}}' | jq -c --arg d "$R" '.cwd = $d')")
+report J18-relative-cwd ask "$(decision_of "$out")" "$out"
+out=$(run_raw "$(jq -cn --arg f "$R/a.txt" --arg c "$GHP" '{tool_name:"Edit",cwd:"/tmp",tool_input:{file_path:$f,edits:["str",{new_string:7},{new_string:$c}]}}')")
+report J19-edits-mixed ask "$(decision_of "$out")" "$out"                     # 配列に文字列・数値が混ざっても文字列の new_string は見る
+out=$(run_raw "$(jq -cn --arg f "$R/a.txt" --arg c "$GHP" '[{tool_name:"Write",tool_input:{file_path:$f,content:$c}}]')")
+report J20-array-input none "$(decision_of "$out")" "$out"
 
 echo "# 全ケース: exit 0 / stderr 無し"
 report Z01-exit-codes "" "$BAD_RC" "$BAD_RC"
