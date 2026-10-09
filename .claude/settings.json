@@ -116,6 +116,17 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $HOME/.claude/hooks/guard-secrets.sh",
+            "timeout": 30,
+            "onFailure": "block"
+          }
+        ]
       }
     ],
     "PermissionRequest": [
