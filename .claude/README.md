@@ -20,7 +20,7 @@
 | `dev-roots` | Claude Code が確認なしで削除・移動できる作業ルートの**唯一の定義**（1行1パス、`~/` 始まり、`#` から行末はコメント、前後の空白と末尾の `/` は無視、`~/` 始まり以外の行は読まれない）。`hooks/guard-destructive.sh`・`nix/home.nix`（`devDirs`）・`tests/test-guard-destructive.sh` が同じ読み方で読む。変更したら `git add` すること（flakeはgit追跡ファイルしか読まない） |
 | `agents/Explore.md` | 組み込みの Explore サブエージェントを同名のユーザー定義で上書きし、`model: haiku` に固定する（組み込みはメインのモデルを継承するため）。読み取り専用（`disallowedTools: Agent, Edit, Write, NotebookEdit`）で `omitClaudeMd: true`。呼び出し時に `model` を渡せばそちらが優先される |
 | `skills/readme/SKILL.md` | `/readme` スキル：READMEを最新状態に更新（なければ新規作成）。`model: sonnet` でそのターンのみSonnetに切り替える |
-| `skills/pr/SKILL.md` | `/pr` スキル：変更をコミット・pushしてGitHubにPRを作成。後から参照・revert しやすいよう、コミットは目的ごとにファイル単位で分ける（1ファイルが複数の目的にまたがるときは主な目的のコミットにまとめて報告）。`disable-model-invocation: true` でユーザー起動限定 |
+| `skills/pr/SKILL.md` | `/pr` スキル：変更をコミット・pushしてGitHubにPRを作成。後から参照・revert しやすいよう、コミットは目的ごとにファイル単位で分ける（1ファイルが複数の目的にまたがるときは主な目的のコミットにまとめて報告）。既に open な PR があれば新規作成せず、PR の全コミットからタイトル・本文を作り直して `gh pr edit` で更新する（`gh pr edit` は pr-mode.sh・`permissions.ask` の対象外）。`disable-model-invocation: true` でユーザー起動限定 |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：ローカルブランチのうちデフォルトブランチ・使用中のブランチ以外を削除して整理（未マージは確認後のみ）。`model: sonnet` でそのターンのみSonnetに切り替える |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントディレクトリのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` で最新化。処理は同梱の `pull.sh` が行い、未コミット変更・分岐などのリポジトリはスキップして1行ずつ結果を出す。`model: haiku` でそのターンのみHaikuに切り替える |
 | `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：新規プロジェクトの開発環境をNix devShell + direnvでセットアップ。`model: sonnet` でそのターンのみSonnetに切り替える |
