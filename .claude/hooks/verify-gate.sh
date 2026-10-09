@@ -4,7 +4,7 @@
 #
 # 契約: dotfiles の検証対象ファイルを Edit / Write / NotebookEdit で変更したセッションでは、
 # 対応する検証コマンドが成功するまでターンを終えさせない（1 回だけ続行を促し、それでも
-# 未検証なら終了を許してユーザーに警告を出す）。
+# 未検証なら終了を許してユーザーに警告を出す。警告した分は、検証対象を新たに編集するまで再び促さない）。
 #
 # リポジトリの CLAUDE.md は「.claude/ 配下を変えたら bash .claude/tests/run.sh、
 # flake.nix / nix/ を変えたら nix eval --raw .#darwinConfigurations.mac.system.drvPath」と
@@ -15,11 +15,17 @@
 #   実体パスに解決し、dotfiles ルート（このスクリプトの実体から ../..。notify.sh と同じ求め方）の
 #   内側なら分類して、状態ファイルにカテゴリ名を重複なしで記録する（1 ファイルが複数カテゴリに入ることもある）
 #     run.sh   … .claude/hooks/**（hooks/lib/*.awk も）・.claude/tests/**・.claude/settings.json・
-#                .claude/setup.sh・.claude/skills/**・.claude/agents/**・bootstrap.sh
+#                .claude/setup.sh・.claude/skills/** のうち .md 以外（skills 配下の .sh 等）と
+#                .claude/skills/<名前>/SKILL.md・.claude/agents/<名前>.md・bootstrap.sh
+#                （skills / agents の .md は run.sh が frontmatter を検査する SKILL.md と agents 直下の
+#                  *.md だけを対象にする。skills 配下の参考資料の .md や agents のサブディレクトリは
+#                  run.sh が何も検査しないので対象外）
 #     nix eval … flake.nix・flake.lock・nix/**
 #     両方     … .claude/dev-roots（guard-destructive.sh とテストが読むうえ、nix/home.nix が
 #                builtins.readFile ../.claude/dev-roots で読むため。リポジトリ CLAUDE.md の規則どおり）
 #   それ以外（README・CLAUDE.md・docs など）は対象外
+#   対象ファイルを編集したときは、警告済みファイル（下記）のカテゴリも状態ファイルへ戻して
+#   警告済みファイルを消す（新しい編集があったので、未検証の分をまとめて再び促す対象にする）
 # - PostToolUse(Bash): 成功した Bash（失敗は PostToolUseFailure なのでここには来ない）のうち
 #     コマンドに .claude/tests/run.sh を含み、tool_response.stdout に「すべて通過」だけの行がある
 #       → run.sh を状態から消す（| tail でパイプすると終了コードは tail のものになるため、
@@ -29,18 +35,30 @@
 #     コマンドに darwinConfigurations.mac.system.drvPath を含み、stdout に行全体が
 #     /nix/store/<名前>.drv の行がある → nix eval を消す（エラーメッセージの途中に出てくる
 #       /nix/store/…drv では解除しない。2>&1 で警告が混ざっても drvPath は単独の行で出る）
-#   状態が空になったら状態ファイルを削除する
+#   消すのは状態ファイルと警告済みファイルの両方から。空になったファイルは削除する
 # - Stop: 状態ファイルにカテゴリが残っていれば
 #     stop_hook_active が false → hookSpecificOutput.additionalContext（hookEventName: "Stop"）で
 #       未検証の内容・実行すべきコマンド・理由を返して続行させる（decision: block より推奨される
-#       「設計どおりの指示」の形。transcript には hook error ではなく Stop hook feedback として出る）
+#       「設計どおりの指示」の形。transcript には hook error ではなく Stop hook feedback として出る）。
+#       状態ファイルは書き換えない
 #     stop_hook_active が true → これ以上止めない（無限ループ防止）。systemMessage でユーザーに
-#       検証未実行のまま終了した旨を警告する。状態ファイルは残す（次のターンでまた促す）
-#     Stop では状態ファイルを書き換えない。pr-mode.sh の Stop は「stop_hook_active が false かつ
-#       状態ファイルが空でない」（= ここが続行させる）と同じ条件を見て /pr フラグを残すので、
-#       この判定条件・状態ファイルのパス・session_id の受け付け形を変えるときは pr-mode.sh も揃える
+#       検証未実行のまま終了した旨を警告し、状態ファイルのカテゴリを警告済みファイルへ移して
+#       状態ファイルを消す（検証が通らないまま無関係な質問のターンが続いても、毎ターン続行させないため）
+#   警告済みファイルにだけカテゴリが残っている Stop では何も出さない（警告は移したときに 1 回出している。
+#   毎ターン systemMessage を出すと、検証と無関係なターンでもユーザーの画面に同じ警告が積み重なるため）
+#
+# 他フックとの連携（同じ条件を 3 本で見る。判定条件・状態ファイルのパス・session_id の受け付け形を
+# 変えるときは 3 本とも揃える）:
+#   「stop_hook_active が false かつ状態ファイルに空でない行が 1 行以上ある（下の read ループと同じ読み方）」
+#   = この Stop でここが続行させる。その Stop では
+#     pr-mode.sh … /pr フラグを消さずに残す（続行後の commit / push が拒否されないように）
+#     notify.sh  … 「完了」通知を送らない（ターンはまだ終わっていない）
+#   Stop フック同士は並行に動き実行順は保証されないが、状態ファイルを書き換えるのは stop_hook_active が
+#   true の Stop だけで、pr-mode.sh・notify.sh は true の Stop では状態ファイルを読まない（false の Stop
+#   ではここも書き換えない）ので、実行順に依存しない。警告済みファイルは両者とも見ない
 #
 # 状態ファイル: ${TMPDIR:-/tmp}/claude-verify-gate-<session_id>（1 行 1 カテゴリ）
+# 警告済みファイル: 状態ファイル名 + .warned（同じ形式）
 #
 # 制約:
 # - session_id 単位。サブエージェントの編集も同じ session_id で届く前提で区別しない
@@ -48,6 +66,8 @@
 # - Bash（sed -i・ヒアドキュメント等）による編集は検出しない（PostToolUse の Edit|Write|NotebookEdit のみ）
 # - 検証コマンドの判定はコマンド文字列と出力の部分一致。別のチェックアウトの run.sh を実行しても解除される
 # - 並列のツール呼び出しで状態ファイルの更新が競合すると、まれに記録が欠けうる（ロックはしない）
+# - stop_hook_active は他の Stop フックが続行させた場合にも true になる。その場合はここが一度も促して
+#   いなくても警告して警告済みへ移す（このリポジトリのフックで Stop を続行させるのはここだけ）
 # - session_id が無い・不正な文字を含む・jq が無い・入力 JSON が壊れている → 何もせず exit 0
 # - どのイベントでも exit 0 固定（Stop の exit 2 は使わない）。stderr には何も出さない
 
@@ -78,6 +98,8 @@ event="$1" session="$2" tool="$3" f="$4" cmd="$5" out="$6" active="$7"
 
 STATE="${TMPDIR:-/tmp}"
 STATE="${STATE%/}/claude-verify-gate-${session}"
+# stop_hook_active が true の Stop で警告を出したカテゴリの置き場（対象ファイルを新たに編集するまで促さない）
+WARNED="${STATE}.warned"
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}" || printf '%s' "${BASH_SOURCE[0]}")"
 ROOT="$(cd "$(dirname "$SELF")/../.." && pwd -P)" || exit 0
@@ -104,27 +126,49 @@ classify() {
     # dev-roots は run.sh（guard-destructive.sh・テストが読む）と nix eval（home.nix が読む）の両方
     .claude/dev-roots)
       printf 'run.sh\nnix eval\n' ;;
-    .claude/hooks/* | .claude/tests/* | .claude/settings.json | .claude/setup.sh \
-      | .claude/skills/* | .claude/agents/* | bootstrap.sh)
+    .claude/hooks/* | .claude/tests/* | .claude/settings.json | .claude/setup.sh | bootstrap.sh)
       printf 'run.sh\n' ;;
+    # skills 配下: .md は run.sh が frontmatter を検査する skills/<名前>/SKILL.md だけを対象にする
+    # （参考資料等のその他の .md は run.sh が何も検査しない）。.sh 等の .md 以外は対象のまま
+    .claude/skills/*)
+      case "$rel" in
+        *.md) [[ "${rel#.claude/skills/}" =~ ^[^/]+/SKILL\.md$ ]] && printf 'run.sh\n' ;;
+        *) printf 'run.sh\n' ;;
+      esac ;;
+    # agents 配下: run.sh が frontmatter を検査する agents 直下の *.md だけ
+    .claude/agents/*)
+      [[ "${rel#.claude/agents/}" =~ ^[^/]+\.md$ ]] && printf 'run.sh\n' ;;
     flake.nix | flake.lock | nix/*)
       printf 'nix eval\n' ;;
   esac
+  return 0
 }
 
+# カテゴリをファイル（状態ファイル / 警告済みファイル）に重複なしで足す: カテゴリ ファイル
 add_cat() {
-  grep -qxF -- "$1" "$STATE" || printf '%s\n' "$1" >>"$STATE"
+  grep -qxF -- "$1" "$2" || printf '%s\n' "$1" >>"$2"
 }
 
+# カテゴリをファイルから消し、空になったらファイルごと消す: カテゴリ ファイル
 remove_cat() {
-  [ -f "$STATE" ] || return 0
-  local tmp="${STATE}.tmp.$$"
-  grep -vxF -- "$1" "$STATE" >"$tmp"
+  [ -f "$2" ] || return 0
+  local tmp="${2}.tmp.$$"
+  grep -vxF -- "$1" "$2" >"$tmp"
   if [ -s "$tmp" ]; then
-    mv -f "$tmp" "$STATE"
+    mv -f "$tmp" "$2"
   else
-    rm -f "$tmp" "$STATE"
+    rm -f "$tmp" "$2"
   fi
+}
+
+# ファイルの空でない行（カテゴリ）を別のファイルへ重複なしで移し、元のファイルを消す: 移動元 移動先
+move_cats() {
+  [ -f "$1" ] || return 0
+  local c
+  while IFS= read -r c; do
+    [ -n "$c" ] && add_cat "$c" "$2"
+  done <"$1"
+  rm -f "$1"
 }
 
 # Stop 時の説明文（カテゴリごと）
@@ -144,28 +188,34 @@ case "$event" in
         [ -n "$f" ] || exit 0
         real=$(resolve "$f")
         cats=$(classify "$real")
+        [ -n "$cats" ] || exit 0
         while IFS= read -r c; do
-          [ -n "$c" ] && add_cat "$c"
+          [ -n "$c" ] && add_cat "$c" "$STATE"
         done <<EOF
 ${cats}
 EOF
+        # 検証対象を新たに編集したので、警告済みで促すのをやめていた分も再び促す対象に戻す
+        move_cats "$WARNED" "$STATE"
         ;;
       Bash)
-        [ -f "$STATE" ] || exit 0
+        [ -f "$STATE" ] || [ -f "$WARNED" ] || exit 0
         case "$cmd" in
           *HOOKS_DIR=*) ;;
           *.claude/tests/run.sh*)
-            printf '%s\n' "$out" | grep -qxF 'すべて通過' && remove_cat "run.sh" ;;
+            printf '%s\n' "$out" | grep -qxF 'すべて通過' \
+              && { remove_cat "run.sh" "$STATE"; remove_cat "run.sh" "$WARNED"; } ;;
         esac
         case "$cmd" in
           *darwinConfigurations.mac.system.drvPath*)
             # 行全体が /nix/store/<名前>.drv の行だけを成功とみなす（--raw は末尾改行なしで出すので printf で足す）
-            printf '%s\n' "$out" | grep -qE '^/nix/store/[^/[:space:]]+\.drv$' && remove_cat "nix eval" ;;
+            printf '%s\n' "$out" | grep -qE '^/nix/store/[^/[:space:]]+\.drv$' \
+              && { remove_cat "nix eval" "$STATE"; remove_cat "nix eval" "$WARNED"; } ;;
         esac
         ;;
     esac
     ;;
   Stop)
+    # 警告済みファイルだけが残っている Stop では何も出さない（冒頭コメント参照）
     [ -s "$STATE" ] || exit 0
     pending=""
     names=""
@@ -177,10 +227,14 @@ EOF
     done <"$STATE"
     [ -n "$names" ] || exit 0
     if [ "$active" = "true" ]; then
-      msg="verify-gate: dotfiles の検証（${names}）が未実行のままターンを終了しました。変更は未検証です。次のターンで検証を実行させてください。
+      msg="verify-gate: dotfiles の検証（${names}）が未実行のままターンを終了しました。変更は未検証です。検証対象のファイルを新たに編集するまで、これ以上は続行を促しません。検証するには次を実行させてください。
 ${pending}"
       jq -cn --arg m "$msg" '{systemMessage: $m}'
+      # 警告した分は警告済みファイルへ移す（pr-mode.sh・notify.sh は stop_hook_active が true の Stop では
+      # 状態ファイルを読まないので、並行して動いても判定は変わらない）
+      move_cats "$STATE" "$WARNED"
     else
+      # 続行させる Stop では状態ファイルを書き換えない（pr-mode.sh・notify.sh が同じ Stop で読む）
       ctx="verify-gate: このセッションで dotfiles の検証対象ファイルを変更しましたが、対応する検証（${names}）がまだ成功していません。ターンを終える前に次を実行してください（| tail 等でパイプしてもよい。出力で成功を判定する）。バックグラウンド実行（run_in_background）では結果が届かず解除されないので、フォアグラウンドで実行する。
 ${pending}
 失敗した場合は自分の変更が原因なら直して再実行する。自分の変更と無関係な既存の失敗なら直さずユーザーに報告する。どうしても実行できない場合は、報告に「未検証」と明記してから終える。"
