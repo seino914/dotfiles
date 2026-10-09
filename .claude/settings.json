@@ -95,11 +95,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hooks/pr-mode.sh"
+            "command": "bash $HOME/.claude/hooks/pr-mode.sh",
+            "timeout": 10,
+            "onFailure": "block"
           },
           {
             "type": "command",
-            "command": "bash $HOME/.claude/hooks/guard-destructive.sh"
+            "command": "bash $HOME/.claude/hooks/guard-destructive.sh",
+            "timeout": 10,
+            "onFailure": "block"
           }
         ]
       },
