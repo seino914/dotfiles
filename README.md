@@ -64,6 +64,7 @@ dotfiles/
     │   ├── pr/SKILL.md               # /pr スキル
     │   ├── readme/SKILL.md           # /readme スキル
     │   ├── clean-branches/SKILL.md   # /clean-branches スキル
+    │   ├── git-pull/SKILL.md         # /git-pull スキル
     │   └── nix-setup/SKILL.md        # /nix-setup スキル
     ├── tests/             # フックのテーブル駆動テスト（run.shで一括実行。~/.claude へは配布しない）
     └── README.md          # Claude Code設定の詳細ドキュメント（フックの契約・/prフロー・通知の設定）
@@ -74,7 +75,7 @@ dotfiles/
 ```zsh
 curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh | bash
 ```
-`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用（このとき`.claude/dev-roots`に列挙した作業ディレクトリ（現在`~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）も作成される）、Claude Code CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
+`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用（このとき`.claude/dev-roots`に列挙した作業ディレクトリ（現在`~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）も作成される）、Claude Code・Codex・Cursor・Devin の各CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
 
 ### Nix環境の適用・更新（2回目以降）
 ```zsh
@@ -108,6 +109,7 @@ nix flake update
 - `/pr`：現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（ユーザー起動限定）
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
+- `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
 - `/nix-setup`：新規プロジェクトの開発環境をNixのdevShell + direnvでセットアップする
 
 ### セットアップスクリプト
