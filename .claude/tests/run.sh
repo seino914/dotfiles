@@ -3,7 +3,8 @@
 #   bash .claude/tests/run.sh
 # 内容: settings.json の JSON 構文、シェルスクリプトの構文、hooks/lib/*.awk の構文、
 #       SKILL.md / agents の frontmatter、フックのテーブル駆動テスト
-#       （pr-mode / guard-destructive / validate-claude-config。各テストの summary 行も検査する）
+#       （pr-mode / guard-destructive / guard-secrets / validate-claude-config / verify-gate の5本。各テストの summary 行も検査する）、
+#       settings.json のフック・statusLine の登録元検査
 # 環境変数 HOOKS_DIR を指定すると、別の場所にあるフック（作業コピー）をテストできる
 set -u
 TESTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
