@@ -16,7 +16,7 @@ status=0
 
 echo "== 構文チェック =="
 if jq empty "$CLAUDE_DIR/settings.json" 2>/dev/null; then echo "  ✓ settings.json"; else echo "  ✗ settings.json: JSON が不正"; status=1; fi
-for f in "$HOOKS_DIR"/*.sh "$CLAUDE_DIR/setup.sh" "$TESTS_DIR"/*.sh "$REPO_DIR/bootstrap.sh" "$HOOKS_DIR"/lib/*.awk; do
+for f in "$HOOKS_DIR"/*.sh "$CLAUDE_DIR/setup.sh" "$TESTS_DIR"/*.sh "$REPO_DIR/bootstrap.sh" "$CLAUDE_DIR"/skills/*/*.sh "$HOOKS_DIR"/lib/*.awk; do
   [ -f "$f" ] || continue
   case "$f" in
     # awk は -f で読み込ませるだけで構文検査になる（/dev/null 入力なので本体は動かない）
