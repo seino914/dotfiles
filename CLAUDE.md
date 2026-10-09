@@ -24,7 +24,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `flake.nix` の `username` ハードコードを動的取得にする — flakeは純粋評価で環境変数を読めない。`bootstrap.sh` がクローン時に `sed` で書き換える設計
 - `~/.zshrc` のリンク先を張り替える・`home.nix` の `manageZshrc` をユーザーの指示なしに `true` にする・この件をユーザーに再確認する — ユーザーの確定した決定（2026-09-04）。現在の `~/.zshrc` は旧 `~/dotfiles` へのリンクのまま使う。経緯と切り替え手順は `zsh/README.md`
 - direnvのzshフックを `programs.direnv.enableZshIntegration` に置き換える — `~/.zshrc` はhome-manager非管理のため注入されない。フックは `.zshrc` に直書きする
-- `claude-code` をNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
+- `claude-code`・Codex・Cursor・Devin の各CLIをNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
 - `sudo darwin-rebuild switch` を実行しようとする — sudoが必要で実行不可。検証を通したうえでユーザーに依頼する
 - /pr フロー四層のうち一層だけを変更する — 整合が壊れる（後述）
 - `.claude/hooks/` のうちテスト対象の5本（pr-mode.sh・guard-destructive.sh・guard-secrets.sh・verify-gate.sh・validate-claude-config.sh）や `lib/strip-shell.awk`（2フックが共有）をテストを通さずに変更する — 正規表現ベースの判定は際どいケースが多く、退行は `bash .claude/tests/run.sh` でしか検出できない

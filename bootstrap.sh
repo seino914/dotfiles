@@ -9,7 +9,7 @@
 #   3. ~/Dev/seino914 を作成してリポジトリをクローン（既にあればそのまま使う）
 #   4. flake.nix の username をこのMacの実際のユーザー名に書き換え
 #   5. nix-darwin を初回適用
-#   6. Claude Code CLI を導入（公式インストーラー・自動更新版。あえてNix管理外）
+#   6. AI コーディング CLI（Claude Code・Codex・Cursor・Devin）を導入（公式インストーラー・自動更新版。あえてNix管理外）
 #
 # 何度実行しても安全（冪等）。途中で失敗したら原因を解消して再実行すればよい。
 
@@ -61,12 +61,34 @@ fi
 echo "==> 5/6 nix-darwin を適用します（sudoのパスワードを求められます）"
 sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ".#mac"
 
-echo "==> 6/6 Claude Code CLI を確認"
+echo "==> 6/6 AI コーディング CLI（Claude Code・Codex・Cursor・Devin）を確認"
+# 常に最新版を使うため、いずれも公式インストーラー（自動更新あり）で導入する（Nix管理外）
 if ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/claude" ]; then
-  echo "Claude Code をインストールします（公式インストーラー・自動更新あり）"
+  echo "Claude Code をインストールします"
   curl -fsSL https://claude.ai/install.sh | bash
 else
-  echo "既にインストール済みのためスキップします"
+  echo "Claude Code は既にインストール済みのためスキップします"
+fi
+if ! command -v codex >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/codex" ]; then
+  echo "Codex CLI をインストールします"
+  # CODEX_NON_INTERACTIVE=1 で "Start Codex now?" 等の対話プロンプトを抑止する
+  curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+else
+  echo "Codex CLI は既にインストール済みのためスキップします"
+fi
+if ! command -v cursor-agent >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/cursor-agent" ]; then
+  echo "Cursor CLI をインストールします"
+  curl -fsSL https://cursor.com/install | bash
+else
+  echo "Cursor CLI は既にインストール済みのためスキップします"
+fi
+if ! command -v devin >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/devin" ]; then
+  echo "Devin CLI をインストールします（最後に初期設定ウィザード devin setup が起動する）"
+  # ウィザードの中断・失敗で bootstrap 全体を止めない
+  curl -fsSL https://cli.devin.ai/install.sh | bash ||
+    echo "Devin CLI の導入または初期設定が完了しませんでした。devin --version で導入を確認し、必要なら devin setup を実行してください"
+else
+  echo "Devin CLI は既にインストール済みのためスキップします"
 fi
 
 echo ""
