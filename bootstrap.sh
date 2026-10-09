@@ -10,6 +10,7 @@
 #   4. flake.nix の username をこのMacの実際のユーザー名に書き換え
 #   5. nix-darwin を初回適用
 #   6. AI コーディング CLI（Claude Code・Codex・Cursor・Devin）を導入（公式インストーラー・自動更新版。あえてNix管理外）
+#      取得・実行に失敗した CLI は警告して飛ばし（全体は止めない）、最後に一覧で再掲する
 #
 # 何度実行しても安全（冪等）。途中で失敗したら原因を解消して再実行すればよい。
 
@@ -63,32 +64,65 @@ sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake ".#mac"
 
 echo "==> 6/6 AI コーディング CLI（Claude Code・Codex・Cursor・Devin）を確認"
 # 常に最新版を使うため、いずれも公式インストーラー（自動更新あり）で導入する（Nix管理外）
+FAILED_CLIS="" # 導入できなかった CLI（改行区切り。bash 3.2 の set -u は空配列の展開で落ちるため文字列で持つ）
+
+# 公式インストーラーを一時ファイルへ取得してから実行する。取得・実行のどちらかに失敗したら
+# 警告を出して 0 を返す（bootstrap 全体は止めない）。curl | sh だと pipefail が無い限り
+# 取得失敗が空入力の成功扱いになるため、取得と実行を分けている
+#   install_cli <表示名> <URL> <実行失敗時の補足（空可）> <実行コマンド...>
+# インストーラーは標準入力から読ませる（curl | sh と同じ形。bootstrap 自体が curl | bash で
+# 動いているとき、子が bootstrap の残りの本文を標準入力から読み込んでしまうのも防ぐ）
+install_cli() {
+  local label="$1" url="$2" hint="$3" tmp
+  shift 3
+  if ! tmp="$(mktemp "${TMPDIR:-/tmp}/bootstrap-installer.XXXXXX")"; then
+    echo "警告: $label のインストーラー用の一時ファイルを作れませんでした。スキップして続行します" >&2
+    FAILED_CLIS="$FAILED_CLIS$label"$'\n'
+    return 0
+  fi
+  if ! curl -fsSL "$url" -o "$tmp"; then
+    echo "警告: $label のインストーラーを取得できませんでした（${url}）。スキップして続行します" >&2
+    FAILED_CLIS="$FAILED_CLIS$label"$'\n'
+  elif ! "$@" <"$tmp"; then
+    echo "警告: $label のインストーラーが失敗しました。${hint:-スキップして続行します（あとで再実行してください）}" >&2
+    FAILED_CLIS="$FAILED_CLIS$label"$'\n'
+  fi
+  rm -f "$tmp"
+  return 0
+}
+
 if ! command -v claude >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/claude" ]; then
   echo "Claude Code をインストールします"
-  curl -fsSL https://claude.ai/install.sh | bash
+  install_cli "Claude Code" https://claude.ai/install.sh "" bash
 else
   echo "Claude Code は既にインストール済みのためスキップします"
 fi
 if ! command -v codex >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/codex" ]; then
   echo "Codex CLI をインストールします"
   # CODEX_NON_INTERACTIVE=1 で "Start Codex now?" 等の対話プロンプトを抑止する
-  curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh
+  install_cli "Codex CLI" https://chatgpt.com/codex/install.sh "" env CODEX_NON_INTERACTIVE=1 sh
 else
   echo "Codex CLI は既にインストール済みのためスキップします"
 fi
 if ! command -v cursor-agent >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/cursor-agent" ]; then
   echo "Cursor CLI をインストールします"
-  curl -fsSL https://cursor.com/install | bash
+  install_cli "Cursor CLI" https://cursor.com/install "" bash
 else
   echo "Cursor CLI は既にインストール済みのためスキップします"
 fi
 if ! command -v devin >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/devin" ]; then
   echo "Devin CLI をインストールします（最後に初期設定ウィザード devin setup が起動する）"
   # ウィザードの中断・失敗で bootstrap 全体を止めない
-  curl -fsSL https://cli.devin.ai/install.sh | bash ||
-    echo "Devin CLI の導入または初期設定が完了しませんでした。devin --version で導入を確認し、必要なら devin setup を実行してください"
+  install_cli "Devin CLI" https://cli.devin.ai/install.sh \
+    "導入または初期設定が完了しませんでした。devin --version で導入を確認し、必要なら devin setup を実行してください" bash
 else
   echo "Devin CLI は既にインストール済みのためスキップします"
+fi
+
+if [ -n "$FAILED_CLIS" ]; then
+  echo ""
+  echo "導入できなかった AI コーディング CLI（このスクリプトを再実行すれば導入済みのものは飛ばして再試行します）:"
+  printf '%s' "$FAILED_CLIS" | sed 's/^/  - /'
 fi
 
 echo ""
