@@ -59,14 +59,21 @@ dotfiles/
     │   ├── pr-mode.sh                # /pr 実行中だけgit操作を自動許可、それ以外は拒否
     │   ├── guard-destructive.sh      # 回復不能な操作（rm -rf・破壊的git操作等）を止める
     │   ├── validate-claude-config.sh # 設定ファイル編集直後の構文検証
-    │   └── lib/strip-shell.awk       # 引用符・HEREDOC除去の共通ライブラリ
+    │   ├── verify-gate.sh            # 検証対象ファイルの編集後、検証コマンドが成功するまでStopで1回だけ続行を促す
+    │   └── lib/
+    │       ├── strip-shell.awk       # 引用符・HEREDOC除去の共通ライブラリ
+    │       └── scan-secrets.sh       # /pr のコミット直前にコミット差分の秘密情報を検査（pr-mode.sh から呼ばれる）
+    ├── agents/
+    │   └── Explore.md                # 組み込みの Explore サブエージェントを上書きして Haiku に固定
     ├── skills/
     │   ├── pr/SKILL.md               # /pr スキル
     │   ├── readme/SKILL.md           # /readme スキル
     │   ├── clean-branches/SKILL.md   # /clean-branches スキル
-    │   ├── git-pull/SKILL.md         # /git-pull スキル
+    │   ├── git-pull/
+    │   │   ├── SKILL.md              # /git-pull スキル
+    │   │   └── pull.sh               # /git-pull の本体スクリプト
     │   └── nix-setup/SKILL.md        # /nix-setup スキル
-    ├── tests/             # フックのテーブル駆動テスト（run.shで一括実行。~/.claude へは配布しない）
+    ├── tests/             # フックのテーブル駆動テストと /git-pull の挙動テスト（run.shで一括実行。~/.claude へは配布しない）
     └── README.md          # Claude Code設定の詳細ドキュメント（フックの契約・/prフロー・通知の設定）
 ```
 
