@@ -138,7 +138,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 
 - `PostToolUse`(Edit|Write|NotebookEdit)：編集先が dotfiles ルート内なら分類し、状態ファイルにカテゴリを記録する
   - `run.sh`：`.claude/hooks/**`・`tests/**`・`settings.json`・`setup.sh`・`bootstrap.sh`、`skills/**` の `.md` 以外と各 `SKILL.md`、`agents/<名前>.md`
-  - `nix eval`：`flake.nix`・`flake.lock`・`nix/**`。`.claude/dev-roots` は両方
+  - `nix eval`：`flake.nix`・`flake.lock`・`nix/**/*.nix`。`.claude/dev-roots` は両方
   - README・`CLAUDE.md`・docs などは対象外
 - `PostToolUse`(Bash)：成功した Bash のうち、コマンドに `.claude/tests/run.sh` を含み出力に「すべて通過」だけの行があれば `run.sh` を、コマンドに `darwinConfigurations.mac.system.drvPath` を含み出力に `/nix/store/…drv` の行があれば `nix eval` を記録から消す。`HOOKS_DIR=` を付けた実行は別の場所のフックを検査しているので数えない
 - `Stop`：記録が残っていれば、`stop_hook_active` が false なら `decision: block` で実行すべきコマンドを返して 1 回だけ続行させる。true なら `systemMessage` で未検証のまま終了した旨を警告し、記録を消す（次に対象を編集するまで促さない）

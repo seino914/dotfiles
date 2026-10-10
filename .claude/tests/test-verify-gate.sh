@@ -18,7 +18,7 @@ ROOT="$(cd "$W/repo" && pwd -P)"   # macOS の TMPDIR（/var/…）は /private/
 ST="$W/tmp"
 for f in .claude/hooks/x.sh .claude/hooks/lib/strip-shell.awk .claude/tests/test-x.sh .claude/settings.json .claude/dev-roots \
   .claude/setup.sh .claude/skills/x/SKILL.md .claude/skills/x/ref.md .claude/skills/x/sub/SKILL.md .claude/skills/x/tool.sh \
-  .claude/agents/a.md .claude/agents/sub/b.md .claude/README.md bootstrap.sh flake.nix flake.lock nix/home.nix README.md CLAUDE.md docs/x.md; do
+  .claude/agents/a.md .claude/agents/sub/b.md .claude/README.md bootstrap.sh flake.nix flake.lock nix/home.nix nix/README.md README.md CLAUDE.md docs/x.md; do
   : > "$W/repo/$f"
 done
 : > "$W/outside/foo.sh"
@@ -143,6 +143,7 @@ nix_eval $W/repo/flake.nix
 nix_eval $W/repo/flake.lock
 nix_eval $W/repo/nix/home.nix
 none $W/repo/README.md
+none $W/repo/nix/README.md
 none $W/repo/CLAUDE.md
 none $W/repo/.claude/README.md
 none $W/repo/docs/x.md

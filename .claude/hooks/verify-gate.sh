@@ -71,7 +71,7 @@ classify() {
         *) printf 'run.sh\n' ;;
       esac ;;
     .claude/agents/*) [[ "${rel#.claude/agents/}" =~ ^[^/]+\.md$ ]] && printf 'run.sh\n' ;;
-    flake.nix | flake.lock | nix/*) printf 'nix eval\n' ;;
+    flake.nix | flake.lock | nix/*.nix) printf 'nix eval\n' ;;
   esac
   return 0
 }
