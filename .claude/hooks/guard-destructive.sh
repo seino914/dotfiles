@@ -28,7 +28,8 @@
 #   lib/strip-shell.awk（keepq）で HEREDOC 本文と行末コメントを除き、引用符の中の空白と ; & | を \001 に置き換えた
 #   文字列から、引用符だけを取り除いたもの。コミットメッセージ等のリテラル（"rm -rf /" など）は 1 トークンのままなので
 #   コマンドと誤認しない。HEREDOC 本文は見ない（本文に curl | sh と書いたファイル作成は通す）。
-#   ; & | 改行 ` で区切った各コマンドを先頭語で見分ける。bash -c / sh -c / eval に渡した文字列は、元のコマンド文字列から
+#   ; & | 改行 ` で区切った各コマンドを先頭語で見分ける（if / then / do / { / ( 等の制御構文の語は読み飛ばす）。
+#   bash -c / sh -c / eval に渡した文字列は、元のコマンド文字列から
 #   最後の bash -c / eval に続く引用符 1 組の中身を取り出し、同じ前処理をかけて再判定する（bash -c 'rm -rf ~' は deny。
 #   nix develop -c / timeout 等のラッパーが前にあっても同じ）。
 #   相対パスは、そのコマンドより前にある最後のリテラルの cd / pushd の行き先（区切りは問わない。無ければ cwd）を基準にし、
@@ -242,6 +243,9 @@ scan() { # 引数: 判定用文字列, その元の文字列
       [ -n "$inner" ] && scan "$(prep "$inner")" "$inner"
       continue
     fi
+    # 制御構文の語（if cd x; then rm …、do rm …、{ rm …; } 等）は読み飛ばし、その後ろのコマンドを先頭語として見る
+    while [ $# -gt 0 ]; do case "$1" in then | do | else | elif | if | while | until | time | '{' | '!' | '(') shift ;; *) break ;; esac; done
+    [ $# -gt 0 ] || continue
     w=${1#\(}; w=${w#\\}; w=${w##*/}
     if [ "$w" = sudo ]; then shift; w=${1-}; w=${w##*/}; fi
     case "$w" in
@@ -251,12 +255,13 @@ scan() { # 引数: 判定用文字列, その元の文字列
         shift; rec=0; dd=0
         for a in "$@"; do case "$a" in --recursive) rec=1 ;; --*) ;; -*[rR]*) rec=1 ;; esac; done
         for a in "$@"; do
+          case "$a" in *[!\(\)]*) ;; *) continue ;; esac   # ( cd x && rm -rf y ) の ( ) だけのトークンは対象ではない
           if [ "$dd" -eq 0 ]; then case "$a" in --) dd=1; continue ;; -*) continue ;; esac; fi
           check_rm_target "$a" "$rec"
         done ;;
-      mv)   # 移動元（最後の引数以外）だけを見る
+      mv)   # 移動元（最後の引数以外）だけを見る。( ) だけのトークンは除く
         shift; srcs=""; last=""
-        for a in "$@"; do case "$a" in -*) continue ;; esac; [ -z "$last" ] || srcs="$srcs $last"; last=$a; done
+        for a in "$@"; do case "$a" in -*) continue ;; *[!\(\)]*) ;; *) continue ;; esac; [ -z "$last" ] || srcs="$srcs $last"; last=$a; done
         for a in $srcs; do check_mv_source "$a"; done ;;
       find)
         shift

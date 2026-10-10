@@ -40,7 +40,7 @@ g D17 deny 'rm -rf .'
 g D18 deny 'rm -rf ..'
 g D19 deny 'rm -rf ../*'
 g D1A deny 'rm -rf dist' "/"                         # cwd が / なら dist は /dist（ルート直下）
-g D1B deny 'cd /tmp && rm -rf ~'
+g D1G deny 'cd /tmp && rm -rf ~'
 g D1C deny 'cd ~/Dev/hobby/app && rm -rf .'          # cd 先（作業中のディレクトリ）自身
 g D1D deny 'rm -rf node_modules ~/Documents'          # 複数対象の一部が致命
 g D1E deny 'git status && rm -rf ~/Documents'
@@ -203,6 +203,22 @@ g C0E deny 'cd ~ && rm -rf Documents'
 g C0F ask  'cd; rm -rf Documents/x'
 g C0G none 'cd ~/Dev/hobby/app && mv .claude /tmp/claude-x'   # cd 先のプロジェクト固有の .claude は保護対象ではない
 g C0H none 'cd ~/Dev/hobby/app && find . -name "*.tmp" -delete' "$HOME/Documents"
+echo "# 制御構文（if / then / do / { / ( 等）の直後のコマンドも先頭語で判定する（回帰: PR #16 レビュー指摘）"
+g K01 deny 'if [ -d ~/Documents ]; then rm -rf ~/Documents; fi'
+g K02 ask  'for d in ~/Library ~/Documents; do rm -rf "$d"; done'
+g K03 ask  'if git diff --quiet; then git reset --hard HEAD~1; fi'
+g K04 ask  'if pgrep node; then pkill node; fi'
+g K05 deny '{ rm -rf ~/Documents; }'
+g K06 none 'if cd ~/Dev/kaishi; then rm -rf app; fi' "$HOME/Documents"   # if の中の cd も追跡する
+g K07 none 'for f in *.log; do rm "$f"; done'
+g K08 none 'while read -r f; do rm -f "$f"; done < list.txt'
+g K09 deny 'if true; then :; else rm -rf ~/Dev/seino914; fi'
+g K0A deny '! rm -rf ~/.claude'
+echo "# 空白を入れたサブシェルの ( ) だけのトークンは削除対象として見ない（回帰: PR #16 レビュー指摘）"
+g K10 none '( cd ~/Dev/kaishi && rm -rf app )'
+g K11 none '(cd ~/Dev/kaishi && rm -rf app)'
+g K12 deny '( rm -rf ~/Documents )'
+g K13 none '( cd ~/Dev/hobby/app && mv dist dist.bak )'
 echo "# mv は保護対象だけを見る（範囲判定はしない）"
 g M01 none 'mv ~/Downloads/spec.pdf docs/'                 # 回帰
 g M02 none 'mv README.md docs/'
@@ -323,7 +339,7 @@ gc() { report "$1" "$2" "$(decision_of "$(run_hook "$TMPH/hooks/guard-destructiv
 gc DC1-inline-comment none "rm -rf $HOME/Dev/hobby/app/build"
 gc DC2-unlisted-root  ask  "rm -rf $HOME/Dev/kaishi/app/build"
 gc DC3-abs-line-ignored ask 'rm -rf /Volumes/abs/x'
-gc DC4-bare-tilde-ignored deny "rm -rf $HOME/Documents"
+gc DC4-bare-tilde-ignored ask "rm -rf $HOME/Documents/x"   # ~ 行を採るとホーム全体が許可ルートになり none に変わる
 rm -rf "$TMPH"
 
 echo "# ask / deny の理由文は「何をするコマンドか」で始まる（説明を変えたらここも変える）"

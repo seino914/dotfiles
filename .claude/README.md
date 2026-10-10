@@ -117,7 +117,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
   - 対象を解決できない（変数・コマンド置換・cd 先が不明な）再帰削除
   - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`
   - `pkill` / `killall`、`kill -1`
-- 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
+- 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける（`if` / `then` / `do` / `{` / `(` 等の制御構文の語は読み飛ばし、その後ろのコマンドを見る）。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
 - 許可ルートの定義は `dev-roots` だけ（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）。理由文は「何をするコマンドか（対象を含む）」＋「なぜ確認が要るか」で書く
 - 何が起きても exit 0（判定不能なら通常の permission 判定に委ねる）。`git push` の force / delete は `pr-mode.sh` が扱うので見ない
 
