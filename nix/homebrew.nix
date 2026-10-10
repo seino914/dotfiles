@@ -25,6 +25,7 @@
       # 開発
       "visual-studio-code"
       "cursor"
+      "devin-desktop"
       "docker-desktop"
       "postman"
 

@@ -4,5 +4,19 @@ claude-notify/node_modules/
 .claude/claude-notify.json
 # プロジェクト固有の Claude Code 設定はグローバルへリンクさせない（setup.sh でも除外）
 .claude/settings.local.json
+# 外部ツール（Orca 等）が settings.json を書き換える前に作るバックアップ（setup.sh でも除外）
+.claude/*.bak
+# Claude Code がプロジェクトの .claude/ に書く実行時の状態。setup.sh は .gitignore 対象外の未追跡ファイルも
+# ~/.claude へリンクするため、ここで除外しないと新しいMacでグローバル側の同名ファイルと衝突する
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/routines/.state/
+.claude/worktrees/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/agent-registry.json
+.claude/agent-memory-local
+.claude/first-run
+.claude/assistant-daemon-state.json
 # 手元の参考資料・メモ置き場（リポジトリには含めない）
 /docs/

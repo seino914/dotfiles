@@ -5,6 +5,7 @@
 # 受信側の PWA は別リポジトリ claude-notify-mobile（Vercel 配信）にある。
 # stdin に hook イベントの JSON が流れてくる。
 # 何が起きても即座に exit 0 で終わる（Claude Code の動作を妨げないため）。
+# 送信に使う node は環境変数 CLAUDE_NOTIFY_NODE で差し替えられる（テストは偽の node で送信を止めて検査する）。
 
 set -u
 
@@ -13,6 +14,8 @@ set -u
 SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
 DOTFILES_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
 SENDER="$DOTFILES_DIR/claude-notify/send-push.mjs"
+# HOME が無い環境では set -u で落ちないよう空扱いにして何もしない（何が起きても exit 0 の契約）
+[ -n "${HOME:-}" ] || exit 0
 LOG_FILE="$HOME/.claude/claude-notify.log"
 
 # 送信スクリプトや jq がなければ何もせず終了（依存の欠如で Claude Code を止めない）

@@ -49,7 +49,7 @@ dotfiles/
 │   ├── package.json       # 依存は web-push のみ
 │   └── pnpm-lock.yaml     # node_modules は activation 時に自動導入（gitignore）
 └── .claude/
-    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・検証・秘密情報・Nix運用・モデル運用）
+    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・検証・レビューの範囲・秘密情報・Nix運用・モデル運用）
     ├── settings.json      # permissions・env・フック登録・言語などの設定
     ├── setup.sh           # .claude/ 配下（gitが管理するファイル）を ~/.claude へシンボリックリンク
     ├── dev-roots          # 削除・作業ディレクトリ作成の許可ルートの唯一の定義（guard-destructive.sh・nix/home.nix・testsが読む）
@@ -59,13 +59,21 @@ dotfiles/
     │   ├── pr-mode.sh                # /pr 実行中だけgit操作を自動許可、それ以外は拒否
     │   ├── guard-destructive.sh      # 回復不能な操作（rm -rf・破壊的git操作等）を止める
     │   ├── validate-claude-config.sh # 設定ファイル編集直後の構文検証
-    │   └── lib/strip-shell.awk       # 引用符・HEREDOC除去の共通ライブラリ
+    │   ├── verify-gate.sh            # 検証対象ファイルの編集後、検証コマンドが成功するまでStopで1回だけ続行を促す
+    │   └── lib/
+    │       ├── strip-shell.awk       # 引用符・HEREDOC除去の共通ライブラリ
+    │       └── scan-secrets.sh       # /pr のコミット直前にコミット差分の秘密情報を検査（pr-mode.sh から呼ばれる）
+    ├── agents/
+    │   └── Explore.md                # 組み込みの Explore サブエージェントを上書きして Haiku に固定
     ├── skills/
     │   ├── pr/SKILL.md               # /pr スキル
     │   ├── readme/SKILL.md           # /readme スキル
     │   ├── clean-branches/SKILL.md   # /clean-branches スキル
+    │   ├── git-pull/
+    │   │   ├── SKILL.md              # /git-pull スキル
+    │   │   └── pull.sh               # /git-pull の本体スクリプト
     │   └── nix-setup/SKILL.md        # /nix-setup スキル
-    ├── tests/             # フックのテーブル駆動テスト（run.shで一括実行。~/.claude へは配布しない）
+    ├── tests/             # フックのテーブル駆動テストと /git-pull の挙動テスト（run.shで一括実行。~/.claude へは配布しない）
     └── README.md          # Claude Code設定の詳細ドキュメント（フックの契約・/prフロー・通知の設定）
 ```
 
@@ -74,7 +82,7 @@ dotfiles/
 ```zsh
 curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh | bash
 ```
-`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用（このとき`.claude/dev-roots`に列挙した作業ディレクトリ（現在`~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）も作成される）、Claude Code CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
+`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用（このとき`.claude/dev-roots`に列挙した作業ディレクトリ（現在`~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）も作成される）、Claude Code・Codex・Cursor・Devin の各CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
 
 ### Nix環境の適用・更新（2回目以降）
 ```zsh
@@ -108,6 +116,7 @@ nix flake update
 - `/pr`：現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（ユーザー起動限定）
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
+- `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
 - `/nix-setup`：新規プロジェクトの開発環境をNixのdevShell + direnvでセットアップする
 
 ### セットアップスクリプト
@@ -115,7 +124,7 @@ nix flake update
 - `bash vscode/install-extensions.sh`：`vscode/extensions.txt`の拡張機能をVSCode/Cursorへ導入（`darwin-rebuild switch`時にも自動実行される。冪等）
 
 ### 検証（sudo不要）
-- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter）とフック（pr-mode・guard-destructive・validate-claude-config）のテーブル駆動テスト計533件を数秒で実行。`.claude/hooks/`を変更したら必ず通す
+- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter・settings.json のフック登録元）とフック（pr-mode・guard-destructive・verify-gate・validate-claude-config）のテーブル駆動テストと /git-pull の挙動テスト一式を1分ほどで実行。`.claude/hooks/`を変更したら必ず通す
 - `nix eval --raw .#darwinConfigurations.mac.system.drvPath`：`flake.nix` / `nix/`の評価エラーと`git add`漏れを検出（`switch`の前に流す。options.jsonのwarningは上流由来で無視してよい）
 - `.claude/dev-roots`（削除・作業ディレクトリの許可ルート。1行1パス・`~/`始まり・`#`から行末はコメント）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
 
