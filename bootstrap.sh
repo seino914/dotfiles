@@ -113,8 +113,14 @@ fi
 if ! command -v devin >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/devin" ]; then
   echo "Devin CLI をインストールします（最後に初期設定ウィザード devin setup が起動する）"
   # ウィザードの中断・失敗で bootstrap 全体を止めない
-  install_cli "Devin CLI" https://cli.devin.ai/install.sh \
-    "導入または初期設定が完了しませんでした。devin --version で導入を確認し、必要なら devin setup を実行してください" bash
+  failed_before="$FAILED_CLIS"
+  install_cli "Devin CLI" https://cli.devin.ai/install.sh "" bash
+  # ウィザード（devin setup）を中断するとインストーラーは非ゼロで終わるが、本体は導入済みのことがある。
+  # 再実行しても導入済みとして飛ばされるので、失敗一覧には載せず案内だけ出す
+  if [ "$FAILED_CLIS" != "$failed_before" ] && [ -x "$HOME/.local/bin/devin" ]; then
+    FAILED_CLIS="$failed_before"
+    echo "Devin CLI は導入済みです。初期設定が終わっていなければ devin setup を実行してください（~/.local/bin が PATH にない場合は ~/.local/bin/devin setup）"
+  fi
 else
   echo "Devin CLI は既にインストール済みのためスキップします"
 fi
