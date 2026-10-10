@@ -8,8 +8,9 @@
 # - 対象は「Claude がふつうに書くコマンド」だけ。エスケープ・ブレース展開・引用符で割ったコマンド語（git "commit"）・
 #   長オプションの省略形（--amen）・文字列に包んでシェルに渡す形（bash -c "git push" / eval）・コメント細工などの
 #   難読化による回避は対象外で、検出しない。CLAUDE.md の指示と permissions.ask が残りの層を担う。
-# - /pr 中でも、サブエージェント（入力に agent_id がある）は deny。下の自動承認の条件を満たさないものは ask
-#   （フックの ask は auto mode でも必ずダイアログになる）。gh pr merge は permissions.ask で常に確認（ここでは扱わない）。
+# - /pr 中でも、サブエージェント（入力に agent_id がある）は deny。下の自動承認の条件を満たさないもののうち、書き方だけの
+#   問題（複合コマンド・ラッパー・-C 等の大域オプション）は deny して単一コマンドで書き直させ（ユーザーにダイアログを出さない）、
+#   危険を含むもの（force・既定ブランチ宛・秘密情報など）は ask（フックの ask は auto mode でも必ずダイアログになる）。gh pr merge は permissions.ask で常に確認（ここでは扱わない）。
 # - Stop は無条件でフラグを消す。/pr の途中でターンを終えると次ターンは拒否される（SKILL.md が AskUserQuestion を使う）。
 # - jq が無い・入力 JSON が壊れている → 何もせず exit 0（~/.claude/pr-mode.log に記録）。session_id の無い
 #   PreToolUse / PermissionRequest は /pr 中と確認できないので /pr 外として扱う。どのイベントでも exit 0。
@@ -29,7 +30,7 @@
 #   gh api で /pulls か /pulls/<番号> に書き込む（-X/--method が POST|PATCH|PUT、または -f/-F/--field/--raw-field/--input）
 # のどれかで始まるものを対象とする。gh api の判定だけは引用符を残した版（keepq）の区切りで見る（パスが引用されていることがある）。
 #
-# 自動承認の条件（/pr 中・agent_id 無し。すべて満たすときだけ allow、満たさなければ理由つきで ask）:
+# 自動承認の条件（/pr 中・agent_id 無し。すべて満たすときだけ allow。1 つ目を満たさなければ deny、それ以外は理由つきで ask）:
 # - git commit / git push / gh pr create|new|edit で始まる単一コマンド（ラッパー・-C 等の大域オプション無し。区切りが 1 つ。
 #   リダイレクト・コマンド置換無し。2>&1 と、本文を渡す "$(cat <<'EOF' … EOF\n)" の定型だけ許す）
 # - git push: -f / --force* / +ref、-d / --delete / :ref、--mirror、--no-verify を含まない。宛先の refspec にも現在ブランチにも
@@ -133,10 +134,11 @@ RE_DELETE='^(--delete$|-[A-Za-z]*d|:)'
 RE_NOVERIFY='^(--amend$|--no-verify$|-[A-Za-z]*n)'
 RE_ALL='^(--all$|-[A-Za-z]*a)'
 
-# /pr 中の自動承認対象か（引数: 生コマンド）。対象なら 0。満たさない理由を why に入れる
+# /pr 中の自動承認対象か（引数: 生コマンド）。対象なら 0。満たさない理由を why に入れ、書き方だけの問題
+# （複合コマンド・ラッパー・大域オプション）なら form=1 にする（PreToolUse がダイアログではなく deny で書き直させる）
 is_auto_approvable() {
   local raw="$1" s rest kind tok line cwd branch def re found
-  why=""
+  why=""; form=""
   cwd=$(printf '%s' "$input" | jq -r '.cwd // ""')
   # 許す定型を取り除く: "$(cat <<'EOF'" の開きと 2>&1 系。2 行目以降は ")" で始まる閉じ行だけ許し、その残り（--base 等）は
   # 1 行目に継ぎ足す。残りが 1 行の単一コマンドでなければ落とす
@@ -148,13 +150,14 @@ is_auto_approvable() {
     case "$line" in ')'*) s="$s ${line#\)}" ;; '') ;; *) rest=1 ;; esac
   done < <(printf '%s\n' "$(strip_cmd "${raw//\\$'\n'/ }")" | sed -E "1s/\\\$\\(cat[[:space:]]+<<-?[[:space:]]*['\"]?[A-Za-z_][A-Za-z0-9_-]*['\"]?//; s/[0-9]*>&[0-9]+//g")
   case "$s" in *[';&|()<>`']*) rest=1 ;; esac
-  if [ "$rest" -gt 0 ]; then why="複合コマンド・リダイレクト・コマンド置換を含む（単一の git commit / git push / gh pr create|edit だけを自動承認する）"; return 1; fi
+  if [ "$rest" -gt 0 ]; then form=1; why="複合コマンド・リダイレクト・コマンド置換を含む"; return 1; fi
   set -f; set -- $s; set +f
   case "$1 $2 ${3-}" in
     "git commit "*) kind=commit; shift 2 ;;
     "git push "*) kind=push; shift 2 ;;
     "gh pr create" | "gh pr new" | "gh pr edit") kind=gh; shift 3 ;;
-    *) why="ラッパー・大域オプション・gh api 経由（git commit / git push / gh pr create|new|edit で始まる形だけを自動承認する）"; return 1 ;;
+    "gh api "*) why="gh api での PR の作成・更新（gh pr create / edit を使う）"; return 1 ;;
+    *) form=1; why="ラッパー・大域オプション（-C 等）付き"; return 1 ;;
   esac
   case "$kind" in
     push)
@@ -211,7 +214,11 @@ case "$event" in
       jq -cn '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"コミット・push・PR の作成・更新はユーザーが /pr を実行しているターンでのみ許可されます。自分では実行せず、ユーザーに /pr の実行を依頼してください。"}}'
     elif [ -n "$agent" ]; then
       jq -cn '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:"/pr のコミット・push・PR の作成・更新はサブエージェントからは実行できません。メインセッションで直接実行してください。"}}'
-    elif ! is_auto_approvable "$cmd"; then
+    elif ! is_auto_approvable "$cmd" && [ -n "$form" ]; then
+      # 書き方だけの問題でユーザーにダイアログを出さない。拒否して単一コマンドで書き直させる
+      jq -cn --arg r "/pr 中の自動承認は単一コマンドだけです（${why}）。git commit / git push / gh pr create・edit を、他のコマンド・ラッパー・-C を付けずに 1 回の Bash 呼び出しで実行し直してください。別のディレクトリで実行するなら、先に cd だけを別の Bash 呼び出しで実行します。" \
+        '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+    elif [ -n "$why" ]; then
       jq -cn --arg r "/pr 中でも自動承認の条件を満たさないため、ユーザーの確認が必要です。理由: ${why}" \
         '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"ask",permissionDecisionReason:$r}}'
     fi

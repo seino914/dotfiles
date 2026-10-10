@@ -89,8 +89,8 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `/pr` 外：対象コマンドを deny（`PreToolUse`。`PermissionRequest` でも deny して二重化）。`--help` や `--dry-run` の例外は無い
 - `/pr` 中：
   - サブエージェント（フック入力に `agent_id` がある）は deny。git 操作はメインセッションが直接行う
-  - 次をすべて満たす単一コマンドだけ自動承認（`PermissionRequest` で allow）。満たさなければ理由つきで ask する（フックの ask は auto mode でも必ずダイアログになる）
-    - 区切りが 1 つで、リダイレクト・コマンド置換を含まない（`2>&1` と、本文を渡す `"$(cat <<'EOF' … EOF)"` の定型だけ許す）。ラッパー・大域オプション付き・`gh api` 経由は自動承認しない
+  - 次をすべて満たす単一コマンドだけ自動承認（`PermissionRequest` で allow）。1 つ目（書き方）を満たさなければ deny して単一コマンドで書き直させる（書き方の誤りでユーザーにダイアログを出さない）。2 つ目以降（危険を含む）を満たさなければ理由つきで ask する（フックの ask は auto mode でも必ずダイアログになる）
+    - 区切りが 1 つで、リダイレクト・コマンド置換を含まない（`2>&1` と、本文を渡す `"$(cat <<'EOF' … EOF)"` の定型だけ許す）。ラッパー・大域オプション（`-C` 等）を付けない
     - `git push`：force（`-f` / `--force*` / `+ref`）、削除（`-d` / `--delete` / `:ref`）、`--mirror`、`--no-verify` を含まない。宛先の refspec にも現在ブランチにも既定ブランチ（`main` / `master` と `refs/remotes/origin/HEAD` の指す先）を含まない
     - `git commit`：`--amend`・`--no-verify`・`-n` を含まず、コミットされる差分に秘密情報が見つからない（次節）
     - `gh pr create|new|edit`：`-R` / `--repo` を含まない

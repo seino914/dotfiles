@@ -66,8 +66,8 @@ git commit / push / PR作成・更新（`gh pr create`（別名 `gh pr new`）/ 
 
 1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にする
 2. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
-3. `.claude/settings.json` の `permissions.ask` — 対象コマンド（`git commit` / `git push` / `gh pr create` / `gh pr new` / `gh pr edit` / `gh pr merge`）を常に確認対象にする。前方一致で拾えないラッパー付きの形は層4の PreToolUse が `/pr` 外は deny、`/pr` 中は ask にする
-4. `.claude/hooks/pr-mode.sh` — `/pr` 外は対象コマンドを deny（`gh api` の `/pulls` 書き込みを含む。`--help` / `--dry-run` の例外は無い）。`/pr` 中は、サブエージェント（フック入力に `agent_id` がある）は deny、単一コマンドで force・削除・`--no-verify`・`--amend`・既定ブランチ宛・`-R` / `--repo` のどれも無く、コミット差分に秘密情報（`lib/scan-secrets.sh` が検査）が無いものだけ自動承認し、それ以外は理由つきで ask。`gh pr merge` は常に ask。Stop でフラグを無条件に消す（verify-gate とは連携しない）
+3. `.claude/settings.json` の `permissions.ask` — 対象コマンド（`git commit` / `git push` / `gh pr create` / `gh pr new` / `gh pr edit` / `gh pr merge`）を常に確認対象にする。前方一致で拾えないラッパー付きの形も層4の PreToolUse が deny する（`/pr` 中は単一コマンドで書き直させる）
+4. `.claude/hooks/pr-mode.sh` — `/pr` 外は対象コマンドを deny（`gh api` の `/pulls` 書き込みを含む。`--help` / `--dry-run` の例外は無い）。`/pr` 中は、サブエージェント（フック入力に `agent_id` がある）は deny、単一コマンドで force・削除・`--no-verify`・`--amend`・既定ブランチ宛・`-R` / `--repo` のどれも無く、コミット差分に秘密情報（`lib/scan-secrets.sh` が検査）が無いものだけ自動承認する。書き方だけの問題（複合コマンド・ラッパー・`-C` 等）は deny して書き直させ（ユーザーにダイアログを出さない）、危険を含むものは理由つきで ask。`gh pr merge` は常に ask。Stop でフラグを無条件に消す（verify-gate とは連携しない）
 
 層4の `UserPromptSubmit` は、`/pr` の展開本文かどうかを `skills/pr/SKILL.md` の最初の `# ` 見出しで見分ける（見出しは実行時に読むので改名してよいが、**H1 を無くすと判定できなくなる**）。
 
