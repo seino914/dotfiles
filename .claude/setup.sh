@@ -30,7 +30,7 @@ is_excluded() {
     setup.sh | README.md | claude-notify.example.json) return 0 ;;   # リポジトリ管理用
     tests/* | tests) return 0 ;;                                       # フックのテスト（配布不要）
     claude-notify.json | settings.local.json) return 0 ;;             # 秘密鍵・プロジェクト固有
-    *.DS_Store | *.swp | *.swo | *~ | .#* | *.orig | *.rej | *.backup.*) return 0 ;;  # 一時・バックアップ
+    *.DS_Store | *.swp | *.swo | *~ | .#* | *.orig | *.rej | *.backup.* | *.bak) return 0 ;;  # 一時・バックアップ
     *) return 1 ;;
   esac
 }

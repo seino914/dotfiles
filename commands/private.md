@@ -7,6 +7,7 @@
 /pr
 /readme
 /clean-branches
+/git-pull
 /nix-setup
 ```
 
