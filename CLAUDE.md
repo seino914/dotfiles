@@ -16,6 +16,10 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 
 `~/.claude/*` はこのリポジトリの `.claude/` へのシンボリックリンク。編集すると**コミット前でも全プロジェクトのClaude Code挙動が変わる**。逆に `/model` や `/config` での変更はこのリポジトリの `settings.json` に未コミット差分として現れる。`.claude/CLAUDE.md` はグローバル指示の実体であり、本ファイルとは役割が違う。
 
+## 脅威モデル（レビューの前提）
+
+`.claude/hooks/`・`.claude/skills/`・`bootstrap.sh` 等は、操作者がユーザーと Claude だけの**事故防止の部品**。普通の使い方で起きる事故だけを見て、難読化・敵対的な回避は対象外（グローバル CLAUDE.md の「レビューの範囲」）。例外は `claude-notify/` と `~/.claude/claude-notify.json`（VAPID 秘密鍵と購読情報を扱い、外部の Push サービスへ送信する）で、秘密情報の扱いとしてセキュリティの前提で見る。
+
 ## やってはいけないこと（理由つき）
 
 - `darwin.nix` の `nix.enable = false` を変える — Nix本体はDeterminate Systemsインストーラーが管理しており、二重管理で衝突する
