@@ -9,7 +9,7 @@
 | ファイル | 役割 |
 | :--- | :--- |
 | `settings.json` | Claude Code の設定（フック・model・permissions など） |
-| `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・検証・レビューの範囲・秘密情報・パッケージ・モデル運用） |
+| `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・ファイル削除とプロセス停止・検証・レビューの範囲・秘密情報・パッケージ・モデル運用） |
 | `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は `claude-notify/send-push.mjs`） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成・更新を条件つきで自動承認し、それ以外は拒否するフック |
 | `hooks/guard-destructive.sh` | ルート・ホーム・`~/.claude` の削除、`curl \| sh`、ディスク消去などの事故を止めるフック |

@@ -49,7 +49,7 @@ dotfiles/
 │   ├── package.json       # 依存は web-push のみ
 │   └── pnpm-lock.yaml     # node_modules は activation 時に自動導入（gitignore）
 └── .claude/
-    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・検証・秘密情報・Nix運用・モデル運用）
+    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・検証・レビューの範囲・秘密情報・Nix運用・モデル運用）
     ├── settings.json      # permissions・env・フック登録・言語などの設定
     ├── setup.sh           # .claude/ 配下（gitが管理するファイル）を ~/.claude へシンボリックリンク
     ├── dev-roots          # 削除・作業ディレクトリ作成の許可ルートの唯一の定義（guard-destructive.sh・nix/home.nix・testsが読む）
