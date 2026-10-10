@@ -14,7 +14,7 @@
 #     run.sh   … .claude/hooks/**・.claude/tests/**・.claude/settings.json・.claude/setup.sh・bootstrap.sh・
 #                .claude/skills/** のうち .md 以外と .claude/skills/<名前>/SKILL.md・.claude/agents/<名前>.md
 #                （run.sh が検査するものだけ。skills 配下の参考資料の .md や agents のサブディレクトリは対象外）
-#     nix eval … flake.nix・flake.lock・nix/**
+#     nix eval … flake.nix・flake.lock・nix/**/*.nix（nix/README.md 等のドキュメントは対象外）
 #     両方     … .claude/dev-roots（guard-destructive.sh とテストが読むうえ、nix/home.nix も readFile で読む）
 # - PostToolUse(Bash): 成功した Bash のうち、コマンドに .claude/tests/run.sh を含み stdout に行全体が「すべて通過」の行が
 #   あれば run.sh を、コマンドに darwinConfigurations.mac.system.drvPath を含み stdout に行全体が /nix/store/<名前>.drv の
