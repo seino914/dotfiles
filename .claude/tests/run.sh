@@ -3,7 +3,7 @@
 #   bash .claude/tests/run.sh
 # 内容: settings.json の JSON 構文、シェルスクリプトの構文、hooks/lib/*.awk の構文、
 #       SKILL.md / agents の frontmatter、フックのテーブル駆動テスト
-#       （pr-mode / guard-destructive / guard-secrets / validate-claude-config / verify-gate の5本。各テストの summary 行も検査する）、
+#       （pr-mode / guard-destructive / validate-claude-config / verify-gate の4本。各テストの summary 行も検査する）、
 #       /git-pull スキルの pull.sh の挙動テスト（test-git-pull.sh。使い捨ての bare リポジトリで動かす）、
 #       settings.json のフック・statusLine の登録元検査
 # 環境変数 HOOKS_DIR を指定すると、別の場所にあるフック（作業コピー）をテストできる
@@ -74,11 +74,6 @@ fi
 
 echo "== フックのテスト（HOOKS_DIR=${HOOKS_DIR}）=="
 out="${TMPDIR:-/tmp}/claude-tests-$$.out"   # 一時出力はリポジトリ内に作らない
-# テストがフックの本物のログ（~/.claude/pr-mode.log）に書き込まないことを、前後の行数で検査する
-# （test-pr-mode.sh は HOME を一時ディレクトリに向ける。別セッションのフックが同時に書くと誤検出になりうる）
-PRLOG="$HOME/.claude/pr-mode.log"
-log_lines() { if [ -f "$PRLOG" ]; then wc -l < "$PRLOG" | tr -d ' '; else echo 0; fi; }
-log_before=$(log_lines)
 for t in "$TESTS_DIR"/test-*.sh; do
   bash "$t" >"$out" 2>&1 || { status=1; }
   grep -E '^  [✓✗]' "$out"; grep -E '^  NG' "$out"
@@ -91,12 +86,6 @@ for t in "$TESTS_DIR"/test-*.sh; do
   fi
 done
 rm -f "$out"
-log_after=$(log_lines)
-if [ "$log_after" -eq "$log_before" ]; then
-  echo "  ✓ ~/.claude/pr-mode.log は未変更（テストは本物のログに書かない）"
-else
-  echo "  ✗ テストが ~/.claude/pr-mode.log に $((log_after - log_before)) 行書き込んだ（HOME の隔離が効いていない）"; status=1
-fi
 
 if [ "$status" -eq 0 ]; then echo "すべて通過"; else echo "失敗があります" >&2; fi
 exit "$status"

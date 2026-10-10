@@ -2,7 +2,7 @@
 
 ## リポジトリの性質
 
-macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/tests/run.sh`（フックのテーブル駆動テストと、settings.json のフック登録元検査）だけがある（変更後の検証手段は後述）。管理対象：
+macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/tests/run.sh`（フックのテーブル駆動テスト・/git-pull の挙動テスト・settings.json のフック登録元検査）だけがある（変更後の検証手段は後述）。管理対象：
 
 - `flake.nix` + `nix/` — nix-darwin + home-manager + nix-homebrew によるmacOS環境全体の宣言管理。`bootstrap.sh` が新Macの1コマンドセットアップ
 - `vscode/` — VSCode / Cursor 共通設定の実体。書き込み可能リンクで両エディタへ配る（詳細 `vscode/README.md`）
@@ -27,9 +27,9 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `claude-code`・Codex・Cursor・Devin の各CLIをNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
 - `sudo darwin-rebuild switch` を実行しようとする — sudoが必要で実行不可。検証を通したうえでユーザーに依頼する
 - /pr フロー四層のうち一層だけを変更する — 整合が壊れる（後述）
-- `.claude/hooks/` のうちテスト対象の5本（pr-mode.sh・guard-destructive.sh・guard-secrets.sh・verify-gate.sh・validate-claude-config.sh）や `lib/strip-shell.awk`（2フックが共有）をテストを通さずに変更する — 正規表現ベースの判定は際どいケースが多く、退行は `bash .claude/tests/run.sh` でしか検出できない
-- `guard-destructive.sh` に「この書き方も拒否する」正規表現を足して穴を塞ぎ続ける — 契約（フック冒頭の一文）が壊れる。解釈できない書き方は deny ではなく**説明つき ask** に倒す設計で、新しい書き方が見つかったら「解釈不能に分類されて ask になるか」を確認するだけにする
-- `settings.json` の `pr-mode.sh`・`guard-destructive.sh`・`guard-secrets.sh` の `onFailure: "block"` を外す — 外すと、安全装置のフックが壊れたとき（起動不能・タイムアウト・想定外の exit コード）に黙って素通りになる。代償として、フックのファイルが消える・壊れると全 Bash / Write / Edit が止まるが、復旧は `claude --safe-mode`（`.claude/README.md` の「緊急時の復旧」）で行う
+- `.claude/hooks/` のうちテスト対象の4本（pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh）や `lib/strip-shell.awk`（2フックが共有）・`lib/scan-secrets.sh`（pr-mode が呼ぶ）をテストを通さずに変更する — 正規表現ベースの判定は際どいケースが多く、退行は `bash .claude/tests/run.sh` でしか検出できない
+- フック（pr-mode.sh・guard-destructive.sh 等）に判定を足して抜け道を塞ぎ続ける — フックは Claude の事故防止であり、難読化・敵対的な回避は対象外（複雑さ自体がリスクになる）。レビューで抜け道を指摘されても判定は足さない（グローバル CLAUDE.md の「レビューの範囲」）。解釈できない形は通す
+- `settings.json` の `pr-mode.sh`・`guard-destructive.sh` の `onFailure: "block"` を外す — 外すと、安全装置のフックが壊れたとき（起動不能・タイムアウト・想定外の exit コード）に黙って素通りになる。代償として、フックのファイルが消える・壊れると全 Bash が止まるが、復旧は `claude --safe-mode`（`.claude/README.md` の「緊急時の復旧」）で行う
 - 許可ルート（削除できるディレクトリ）を `guard-destructive.sh` や `nix/home.nix` に直接書く — 定義は `.claude/dev-roots` 1か所だけ（下の「編集時に知っておくこと」）
 
 ## 編集時に知っておくこと
@@ -66,8 +66,8 @@ git commit / push / PR作成・更新（`gh pr create`（別名 `gh pr new`）/ 
 
 1. `.claude/skills/pr/SKILL.md` の `disable-model-invocation: true` — `/pr` をユーザー起動限定にする
 2. `.claude/CLAUDE.md` — `/pr` 指示があるまでgit操作を禁止する指示
-3. `.claude/settings.json` の `permissions.ask` — 対象コマンド（`git commit` / `git push` / `gh pr create` / `gh pr new` / `gh pr edit` / `gh pr merge`）を常に確認対象にする。前方一致で拾えない形（`gh pr -R o/r create` / `command git push` / `env X=1 git push` / `/usr/bin/git push` 等）は層4の PreToolUse が `/pr` 中は ask・`/pr` 外は deny にする
-4. `.claude/hooks/pr-mode.sh` — `/pr` 実行中だけ確認を自動承認し、それ以外は拒否する（`/pr` 中でも、サブエージェント＝フック入力に `agent_id` があるものは deny、自動承認の条件を満たさないものは ask。`gh pr merge` は常に ask。サブコマンド直後に `--help` だけを置いた形と `-u` 以外のオプションを伴わない `git push --dry-run` は何も書き換えないので拒否せず自動承認する）。Stop でフラグを消すが、`verify-gate.sh` が同じ Stop でターンを続行させるときは残す（両フックの判定条件を揃えて変更する）
+3. `.claude/settings.json` の `permissions.ask` — 対象コマンド（`git commit` / `git push` / `gh pr create` / `gh pr new` / `gh pr edit` / `gh pr merge`）を常に確認対象にする。前方一致で拾えないラッパー付きの形は層4の PreToolUse が `/pr` 外は deny、`/pr` 中は ask にする
+4. `.claude/hooks/pr-mode.sh` — `/pr` 外は対象コマンドを deny（`gh api` の `/pulls` 書き込みを含む。`--help` / `--dry-run` の例外は無い）。`/pr` 中は、サブエージェント（フック入力に `agent_id` がある）は deny、単一コマンドで force・削除・`--no-verify`・`--amend`・既定ブランチ宛・`-R` / `--repo` のどれも無く、コミット差分に秘密情報（`lib/scan-secrets.sh` が検査）が無いものだけ自動承認し、それ以外は理由つきで ask。`gh pr merge` は常に ask。Stop でフラグを無条件に消す（verify-gate とは連携しない）
 
 層4の `UserPromptSubmit` は、`/pr` の展開本文かどうかを `skills/pr/SKILL.md` の最初の `# ` 見出しで見分ける（見出しは実行時に読むので改名してよいが、**H1 を無くすと判定できなくなる**）。
 
