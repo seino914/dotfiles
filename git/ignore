@@ -1,0 +1,5 @@
+# git 全体共通の ignore（~/.config/git/ignore へリンクされる。nix/home.nix 参照）
+# Claude Code のプロジェクト個人設定。各リポジトリの .gitignore に書かずに済ませる
+**/.claude/settings.local.json
+# Claude Code のワークツリー作成先。公式が .gitignore への追加を推奨している
+.claude/worktrees/

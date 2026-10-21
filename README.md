@@ -35,6 +35,8 @@ dotfiles/
 │   ├── keybindings.json   # キーバインドの実体（両エディタで共有）
 │   ├── extensions.txt     # 導入する拡張機能のIDリスト
 │   └── install-extensions.sh # 拡張機能をVSCode/Cursorへ導入（activation時に自動実行）
+├── git/
+│   └── ignore             # git 全体共通の ignore（~/.config/git/ignore へリンク。settings.local.json・.claude/worktrees/ を除外）
 ├── commands/
 │   ├── claude-code.md     # Claude Code組み込みスラッシュコマンド一覧（リファレンス）
 │   └── private.md         # このリポジトリで使えるコマンド・スキルの個人用早見表
@@ -49,7 +51,7 @@ dotfiles/
 │   ├── package.json       # 依存は web-push のみ
 │   └── pnpm-lock.yaml     # node_modules は activation 時に自動導入（gitignore）
 └── .claude/
-    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・検証・レビューの範囲・秘密情報・Nix運用・モデル運用）
+    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・ワークツリー・検証・レビューの範囲・秘密情報・Nix運用・モデル運用）
     ├── settings.json      # permissions・env・フック登録・言語などの設定
     ├── setup.sh           # .claude/ 配下（gitが管理するファイル）を ~/.claude へシンボリックリンク
     ├── dev-roots          # 削除・作業ディレクトリ作成の許可ルートの唯一の定義（guard-destructive.sh・nix/home.nix・testsが読む）

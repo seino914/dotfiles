@@ -64,6 +64,9 @@
     "defaultMode": "auto"
   },
   "model": "opus",
+  "worktree": {
+    "baseRef": "head"
+  },
   "hooks": {
     "UserPromptExpansion": [
       {
