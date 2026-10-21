@@ -324,7 +324,7 @@
     ]
   },
   "tui": "fullscreen",
-  "agentPushNotifEnabled": true,
+  "agentPushNotifEnabled": false,
   "deniedMcpServers": [
     {
       "serverName": "claude.ai Gmail"

@@ -16,7 +16,7 @@
 #                （run.sh が検査するものだけ。skills 配下の参考資料の .md や agents のサブディレクトリは対象外）
 #     nix eval … flake.nix・flake.lock・nix/**/*.nix（nix/README.md 等のドキュメントは対象外）
 #     両方     … .claude/dev-roots（guard-destructive.sh とテストが読むうえ、nix/home.nix も readFile で読む）
-# - PostToolUse(Bash): 成功した Bash のうち、コマンドに .claude/tests/run.sh を含み stdout に行全体が「すべて通過」の行が
+# - PostToolUse(Bash): 成功した Bash のうち、コマンドに tests/run.sh を含み（cwd が .claude の相対実行も数える） stdout に行全体が「すべて通過」の行が
 #   あれば run.sh を、コマンドに darwinConfigurations.mac.system.drvPath を含み stdout に行全体が /nix/store/<名前>.drv の
 #   行があれば nix eval を記録から消す（| tail でパイプすると終了コードは tail のものになるため出力で判定する。
 #   HOOKS_DIR= 付きの実行は別の場所のフックを検査しているので数えない）
@@ -104,7 +104,7 @@ case "$event" in
         [ -f "$STATE" ] || exit 0
         case "$cmd" in
           *HOOKS_DIR=*) ;;
-          *.claude/tests/run.sh*) printf '%s\n' "$out" | grep -qxF 'すべて通過' && remove_cat "run.sh" ;;
+          *tests/run.sh*) printf '%s\n' "$out" | grep -qxF 'すべて通過' && remove_cat "run.sh" ;;
         esac
         case "$cmd" in
           *darwinConfigurations.mac.system.drvPath*)

@@ -76,6 +76,9 @@ bashrun "$S1" "bash $ROOT/.claude/tests/run.sh 2>&1 | tail -3" "$RUN_OK" >/dev/n
 report A15-cleared none "$(state_of "$S1")" ""
 out=$(stop "$S1" false); report A16-stop-silent "" "$out" "$out"
 out=$(stop "$S1" true);  report A17-stop-silent-active "" "$out" "$out"
+edit "$S1" Edit "$W/repo/.claude/hooks/x.sh" >/dev/null
+bashrun "$S1" 'bash tests/run.sh 2>&1 | tail -3' "$RUN_OK" >/dev/null
+report A18-relative-cleared none "$(state_of "$S1")" "cwd が .claude の相対パス実行でも解除する"
 
 echo "# B. stop_hook_active が true なら止めずに systemMessage で警告し、記録を消す"
 edit "$S1" Edit "$W/repo/.claude/hooks/x.sh" >/dev/null
