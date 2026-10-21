@@ -54,8 +54,19 @@ in
   # 以前あった無条件の .zshrc 宣言は旧リンクと衝突して activation 全体
   # （VSCode/Cursor 設定・拡張機能・setup.sh・claude-notify）を止めていたため、
   # トグル付き・force = true の形に置き換えた
+  # ~/.config/git/ignore（git 全体共通の ignore。git が既定の XDG パスとして読む）は
+  # git/ignore への書き込み可能リンクにする。programs.git は使わない
+  # （~/.gitconfig を home-manager 管理にしないため）。
+  # force = true は初回適用時に既存の実体ファイルをリンクへ置き換えるために必要
+  # （既存の内容はリポジトリへ取り込み済み）
   home.file = editorUserFiles "Code" # VSCode
     // editorUserFiles "Cursor"
+    // {
+      ".config/git/ignore" = {
+        source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/git/ignore";
+        force = true;
+      };
+    }
     // lib.optionalAttrs manageZshrc {
       ".zshrc" = {
         source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/zsh/.zshrc";
