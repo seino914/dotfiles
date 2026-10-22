@@ -10,7 +10,9 @@
 
     # JavaScript / Node.js
     nodejs_26
-    pnpm
+    # pnpm はメジャーを明示する。nixpkgs の pnpm は 12 系になったが、
+    # 各プロジェクトの lockfile と private-memo の Workers Builds（PNPM_VERSION）は 11 系
+    pnpm_11
 
     # コンテナ・インフラ
     docker # dockerクライアントCLI（Docker Desktop本体はcask側）

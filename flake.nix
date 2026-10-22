@@ -65,8 +65,8 @@
                       nodePkgs.nodejs_26
                     else
                       prev.lib.warn "nixpkgs に Node 26.12.1 以降が届いた。flake.nix の nixpkgs-node と一時 overlay を削除する" prev.nodejs_26;
-                  pnpm =
-                    if nodeFixed then prev.pnpm.override { nodejs-slim = nodePkgs.nodejs-slim_26; } else prev.pnpm;
+                  pnpm_11 =
+                    if nodeFixed then prev.pnpm_11.override { nodejs-slim = nodePkgs.nodejs-slim_26; } else prev.pnpm_11;
                 }
               )
             ];

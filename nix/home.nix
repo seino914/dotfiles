@@ -124,7 +124,7 @@ in
     run ${pkgs.bash}/bin/bash -c '
       export PATH="${pkgs.nodejs_26}/bin:$PATH"
       cd "${dotfilesPath}/claude-notify" &&
-        "${pkgs.pnpm}/bin/pnpm" install --frozen-lockfile
+        "${pkgs.pnpm_11}/bin/pnpm" install --frozen-lockfile
     ' || echo "警告: claude-notify の依存インストールに失敗しました（iPhone通知は無効のまま。ネットワーク接続後に手動で 'cd ${dotfilesPath}/claude-notify && pnpm install' を実行してください）"
   '';
 }
