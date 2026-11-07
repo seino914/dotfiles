@@ -32,7 +32,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `claude-code`・Codex・Cursor・Devin の各CLIをNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
 - `sudo darwin-rebuild switch` を実行しようとする — sudoが必要で実行不可。検証を通したうえでユーザーに依頼する
 - /pr フロー四層のうち一層だけを変更する — 整合が壊れる（後述）
-- `.claude/hooks/` のうちテスト対象の4本（pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh）や `lib/strip-shell.awk`（2フックが共有）・`lib/scan-secrets.sh`（pr-mode が呼ぶ）をテストを通さずに変更する — 正規表現ベースの判定は際どいケースが多く、退行は `bash .claude/tests/run.sh` でしか検出できない
+- `.claude/hooks/` のうちテスト対象の5本（pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh・notify.sh）や `lib/strip-shell.awk`（2フックが共有）・`lib/scan-secrets.sh`（pr-mode が呼ぶ）をテストを通さずに変更する — 正規表現ベースの判定は際どいケースが多く、退行は `bash .claude/tests/run.sh` でしか検出できない
 - フック（pr-mode.sh・guard-destructive.sh 等）に判定を足して抜け道を塞ぎ続ける — フックは Claude の事故防止であり、難読化・敵対的な回避は対象外（複雑さ自体がリスクになる）。レビューで抜け道を指摘されても判定は足さない（グローバル CLAUDE.md の「レビューの範囲」）。解釈できない形は通す
 - `settings.json` の `pr-mode.sh`・`guard-destructive.sh` の `onFailure: "block"` を外す — 外すと、安全装置のフックが壊れたとき（起動不能・タイムアウト・想定外の exit コード）に黙って素通りになる。代償として、フックのファイルが消える・壊れると全 Bash が止まるが、復旧は `claude --safe-mode`（`.claude/README.md` の「緊急時の復旧」）で行う
 - 許可ルート（削除できるディレクトリ）を `guard-destructive.sh` や `nix/home.nix` に直接書く — 定義は `.claude/dev-roots` 1か所だけ（下の「編集時に知っておくこと」）

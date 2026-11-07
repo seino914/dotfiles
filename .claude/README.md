@@ -118,7 +118,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
   - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`
   - `pkill` / `killall`、`kill -1`
 - 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける（`if` / `then` / `do` / `{` / `(` 等の制御構文の語は読み飛ばし、その後ろのコマンドを見る）。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
-- 許可ルートの定義は `dev-roots` だけ（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）。理由文は「何をするコマンドか（対象を含む）」＋「なぜ確認が要るか」で書く
+- 許可ルートの定義は `dev-roots` だけ（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`・`~/Dev/humanoid`）。理由文は「何をするコマンドか（対象を含む）」＋「なぜ確認が要るか」で書く
 - 何が起きても exit 0（判定不能なら通常の permission 判定に委ねる）。`git push` の force / delete は `pr-mode.sh` が扱うので見ない
 
 ## コミット時の秘密検査
@@ -166,7 +166,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 bash .claude/tests/run.sh
 ```
 
-settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、settings.json のフック・`statusLine` の登録元検査、4 フック（pr-mode / guard-destructive / validate-claude-config / verify-gate）のテーブル駆動テストと /git-pull の `pull.sh` の挙動テストを 1 分ほどで実行する。登録元検査は、フックのコマンドが `bash $HOME/.claude/hooks/<実在するスクリプト>.sh` であることと、許可リスト（`run.sh` の `ALLOWED_EXTERNAL_*`）に載った Orca だけを例外とすることを確認する（外部アプリが settings.json へ黙って書き込んだフックを検出する。新しい外部ツールは中身を確認してから許可リストに足す）。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。`test-pr-mode.sh` は `HOME` を一時ディレクトリに向けて実行するので、本物のログ `~/.claude/pr-mode.log` には書き込まない。`hooks/` の 4 本と `lib/strip-shell.awk` を変更したときは必ず通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
+settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、settings.json のフック・`statusLine` の登録元検査、5 フック（pr-mode / guard-destructive / validate-claude-config / verify-gate / notify）のテーブル駆動テストと /git-pull の `pull.sh` の挙動テストを 1 分ほどで実行する。登録元検査は、フックのコマンドが `bash $HOME/.claude/hooks/<実在するスクリプト>.sh` であることと、許可リスト（`run.sh` の `ALLOWED_EXTERNAL_*`）に載った Orca だけを例外とすることを確認する（外部アプリが settings.json へ黙って書き込んだフックを検出する。新しい外部ツールは中身を確認してから許可リストに足す）。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。`test-pr-mode.sh` は `HOME` を一時ディレクトリに向けて実行するので、本物のログ `~/.claude/pr-mode.log` には書き込まない。`hooks/` の 5 本と `lib/strip-shell.awk` を変更したときは必ず通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
 
 ## 緊急時の復旧（セーフモード）
 
@@ -174,7 +174,7 @@ settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`h
 
 ## iPhoneプッシュ通知（claude-notify）
 
-`Stop`（タスク完了）/ `Notification`（許可待ち。matcher で `permission_prompt` のみ）イベントで `hooks/notify.sh` を実行し、Web Push で iPhone の PWA に通知する。送信本体（`claude-notify/send-push.mjs`）はこのリポジトリに同梱で、notify.sh が自身の実体パスから場所を解決する。依存（`web-push`）は `darwin-rebuild switch` 時に自動導入される。依存が入っていない PC、`HOME` が無い環境では何もせず静かに終了する（何が起きても exit 0）。送信に使う node は環境変数 `CLAUDE_NOTIFY_NODE` で差し替えられる。受信側の PWA は別リポジトリ claude-notify-mobile にあり、仕組みは同リポジトリの `docs/` を参照。
+`Stop`（タスク完了）/ `Notification`（許可待ち。matcher で `permission_prompt` のみ）イベントで `hooks/notify.sh` を実行し、Web Push で iPhone の PWA に通知する。送信本体（`claude-notify/send-push.mjs`）はこのリポジトリに同梱で、notify.sh が自身の実体パスから場所を解決する。依存（`web-push`）は `darwin-rebuild switch` 時に自動導入される。依存が入っていない PC、`HOME` が無い環境では何もせず静かに終了する（何が起きても exit 0）。送信に使う node は環境変数 `CLAUDE_NOTIFY_NODE` で差し替えられる。`Stop` は、バックグラウンドのサブエージェント（`<transcript_path から .jsonl を除いた場所>/subagents/agent-*.meta.json` の `requestShape` が `background` で `finished` が `true` でないもの）が実行中なら送らない。バックグラウンドのサブエージェントが終わるたびにメインのターンが再開して `Stop` が走るため、そのままだと待ちに入った時点とサブエージェント 1 本ごとに通知が飛ぶ（最後の 1 本が終わった後の `Stop` だけ送る）。中断（TaskStop・Esc・ツール実行の拒否）で止まったもの（記録 `.jsonl` の最終行が `Request interrupted by user`）と、`finished` が書かれないまま記録が 15 分更新されていないものは実行中と見なさない。ワークフローの配下は見ないので、ワークフロー実行中の待ちでは通知が出る。受信側の PWA は別リポジトリ claude-notify-mobile にあり、仕組みは同リポジトリの `docs/` を参照。
 
 新しい PC で使うには（`darwin-rebuild switch` 実行後）:
 
