@@ -13,7 +13,7 @@
 
 # ファイル削除・プロセス停止
 
-- ファイル・ディレクトリの削除は `.claude/dev-roots` の作業ルート（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`）と一時領域（`$TMPDIR`・`/tmp/claude-*`）の内側で、対象を具体的なパスで書いて行う（範囲外や危険な形はフックが確認・拒否する）
+- ファイル・ディレクトリの削除は `.claude/dev-roots` の作業ルート（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`・`~/Dev/humanoid`）と一時領域（`$TMPDIR`・`/tmp/claude-*`）の内側で、対象を具体的なパスで書いて行う（範囲外や危険な形はフックが確認・拒否する）
 - 開発サーバー等の停止は `kill $(lsof -ti :<ポート>)` か PID 指定の `kill` で行う（`pkill` / `killall` は確認ダイアログになる）
 
 # ワークツリー

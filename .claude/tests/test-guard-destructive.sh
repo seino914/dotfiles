@@ -351,7 +351,7 @@ gr() { # label 期待する先頭文字列 cmd [cwd]
 }
 gr X01 "'dist' を再帰的に削除するコマンドです。変数・コマンド置換・cd 先が特定できず" 'cd "$D" && rm -rf dist'
 gr X02 "'\$SCRATCH/x' を再帰的に削除するコマンドです" 'rm -rf "$SCRATCH/x"'
-gr X03 '作業ルート（~/Dev/kaishi・~/Dev/seino914・~/Dev/hobby）と一時領域（$TMPDIR・/tmp/claude-*）の外にある' 'rm -rf ~/Dev/x'
+gr X03 '作業ルート（~/Dev/kaishi・~/Dev/seino914・~/Dev/hobby・~/Dev/humanoid）と一時領域（$TMPDIR・/tmp/claude-*）の外にある' 'rm -rf ~/Dev/x'
 gr X04 'ルート・ホーム' 'rm -rf ~'
 gr X05 'ホーム直下の' 'rm -rf ~/Documents'
 gr X06 '作業ルート' 'rm -rf ~/Dev/seino914'
