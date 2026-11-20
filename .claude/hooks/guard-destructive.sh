@@ -19,7 +19,8 @@
 #                    無いか保護名で絞ったときも）、curl | sh 系のリモートスクリプト実行、ディスクの消去
 #   2. 削除の範囲判定 … rm / rmdir / unlink / find -delete / find -exec rm の対象を絶対パスに解決し、作業ルート
 #                    （.claude/dev-roots の各行）か一時領域（$TMPDIR・/tmp/claude-*）の内側なら通す。外側なら ask。
-#                    同じコマンドの中で先に代入した変数（d=/path && rm -rf "$d"）は値に置き換えて判定する。
+#                    同じコマンドの中で先に代入した変数（d=/path && rm -rf "$d"）は値に置き換えて判定する（相対パスは使う時点の
+#                    cd 先で解決し、パス引数の無い $(mktemp) は一時領域）。
 #                    解決できない（それ以外の変数・コマンド置換・cd 先が不明）ものは再帰指定（-r）があるときだけ ask
 #   3. git / kill の ask …… reset --hard / clean -f / checkout・switch の -f / checkout・restore の全体指定（. :/ *）/
 #                    stash drop・clear / branch -D / rm の対象が .git / pkill・killall・kill -1
@@ -110,12 +111,18 @@ norm_path() { # 絶対パスの . と .. を解決する（実在しなくてよ
   printf '%s' "${out:-/}"
 }
 cd_base=""   # 相対パスの基準。"" は cwd、"?" は不明（変数や cd - のあと）
-# 同じコマンドの中で先に代入した変数（d=/path; rm -rf "$d"）。名前と値（正規化済み絶対パス。"" は空、"?" は不明）
+# 同じコマンドの中で先に代入した変数（d=/path; rm -rf "$d"）。名前と値（正規化済み絶対パス。"" は空、"?" は不明、
+# "R:<値>" は相対パスのまま。相対パスは使う時点の cd 先で解決する：name=build; cd ~/x && rm -rf "$name" は ~/x/build）
 # bash 3.2 でも動くよう連想配列は使わない
 VAR_N=(); VAR_V=()
 set_var() { # 引数: 名前, 代入した値（引用符を除いたトークン）
   local v i
-  if [ -z "$2" ]; then v=''; else v=$(resolve "$2"); case "$v" in G:*) v='?' ;; esac; fi
+  case "$2" in
+    '') v='' ;;
+    /* | '~'* | *'$'* | *'`'*) v=$(resolve "$2"); case "$v" in G:*) v='?' ;; esac ;;
+    *[\*\?\[]*) v='?' ;;
+    *) v="R:$2" ;;
+  esac
   for i in "${!VAR_N[@]}"; do [ "${VAR_N[$i]}" = "$1" ] && { VAR_V[$i]=$v; return; }; done
   VAR_N+=("$1"); VAR_V+=("$v")
 }
@@ -131,7 +138,7 @@ resolve() { # トークン → 正規化済み絶対パス。glob を含めば "
       for i in "${!VAR_N[@]}"; do
         [ "${VAR_N[$i]}" = "$n" ] || continue
         case "${VAR_V[$i]}" in '?') printf '?'; return ;; esac
-        t="${VAR_V[$i]}$rest"
+        t="${VAR_V[$i]#R:}$rest"
         [ -n "$t" ] || { printf '?'; return; }
         break
       done ;;
@@ -160,11 +167,11 @@ resolve() { # トークン → 正規化済み絶対パス。glob を含めば "
 }
 cwd_n=""; [ -n "$cwd" ] && cwd_n=$(norm_path "$cwd")
 
+in_tmp() { local r; for r in "${TMP_PREFIXES[@]}"; do case "$1" in "$r"*) return 0 ;; esac; done; return 1; }
 in_allowed() { # 正規化済み絶対パスが作業ルートの内側（ルート自身は含まない）か一時領域なら 0
   local r
   for r in "${ROOTS[@]}"; do case "$1" in "$r"/?*) return 0 ;; esac; done
-  for r in "${TMP_PREFIXES[@]}"; do case "$1" in "$r"*) return 0 ;; esac; done
-  return 1
+  in_tmp "$1"
 }
 is_root() { local r; for r in "${ROOTS[@]}"; do [ "$1" = "$r" ] && return 0; done; return 1; }
 is_protected() { # ~/.claude と dotfiles の .claude、その直下の設定実体（glob の手前のディレクトリとしても同じ）
@@ -200,6 +207,8 @@ check_rm_target() {
   is_root "$r" && deny "作業ルート '${r}' 自体を削除するコマンドです。回復できないため禁止です"
   for base in "$cwd_n" "$cd_base"; do
     case "$base" in '' | '?') continue ;; esac
+    # 一時領域に cd して自分ごと消すのは害が無い（T=$(mktemp -d) && cd "$T" && …; rm -rf "$T"）。Claude の実際の cwd は対象のまま
+    [ "$base" = "$cd_base" ] && [ "${base#/private}" != "${cwd_n#/private}" ] && in_tmp "$r" && continue
     case "$base" in "$r"/*) deny "作業中のディレクトリの親 '${r}' を削除するコマンドです。回復できないため禁止です" ;; esac
     [ -z "$g" ] && [ "$base" = "$r" ] && deny "作業中のディレクトリ '${r}' 自体を削除するコマンドです。回復できないため禁止です"
   done
@@ -254,7 +263,7 @@ fatal_strings() {
 
 # ---- 各コマンドを先頭語で見分けて判定する（引数: 判定する文字列。bash -c の中身で再帰する）----
 scan() { # 引数: 判定用文字列, その元の文字列
-  local text="$1" raw="$2" seg w a i inner rec dd sub f n st wt whole srcs last starts has_filter prot_name prev v
+  local text="$1" raw="$2" seg w a i inner rec dd sub f n st wt whole srcs last starts has_filter prot_name prev v an av
   fatal_strings "$text"
   while IFS= read -r seg; do
     set -- $seg
@@ -270,18 +279,22 @@ scan() { # 引数: 判定用文字列, その元の文字列
     while [ $# -gt 0 ]; do case "$1" in then | do | else | elif | if | while | until | time | '{' | '!' | '(') shift ;; *) break ;; esac; done
     # 変数の代入（d=/path、export S=/path）を覚え、以降の "$d" / "$S/x" を解決する（値がコマンド置換なら不明のまま。ただしパス引数の無い mktemp は一時領域）
     case "${1-}" in export | local | readonly | declare | typeset) shift; while [ $# -gt 0 ] && [ "${1#-}" != "$1" ]; do shift; done ;; esac
+    an=(); av=()
     while [ $# -gt 0 ]; do
       case "$1" in [A-Za-z_]*=*) ;; *) break ;; esac
       n=${1%%=*}; case "$n" in *[!A-Za-z0-9_]*) break ;; esac
       v=${1#*=}; shift
+      # 空白で割れたコマンド置換（d=$(dirname "$f")）は ) で終わるトークンまでを値にする（後ろのコマンドと誤認しないため）
+      case "$v" in *'$('*) while [ "${v%)}" = "$v" ] && [ $# -gt 0 ]; do v="$v $1"; shift; done ;; esac
       # パス引数の無い $(mktemp [-d] [-q] [-t 接頭辞]) は $TMPDIR 直下の固有の名前（一時領域）として扱う。それ以外のコマンド置換は不明
-      if [ "$v" = '$(mktemp' ]; then
-        while [ "${v%)}" = "$v" ] && [ $# -gt 0 ]; do v="$v $1"; shift; done
-        if [ -n "$tmpdir" ] && printf '%s' "$v" | grep -Eq '^\$\(mktemp( -[dq]+| -[dq]*t [^/ )]+)*\)$'; then v="$tmpdir/mktemp.X"; fi
-      fi
-      set_var "$n" "$v"
+      if [ -n "$tmpdir" ] && printf '%s' "$v" | grep -Eq '^\$\(mktemp( -[dq]+| -[dq]*t [^/ )]+)*\)$'; then v="$tmpdir/mktemp.X"; fi
+      an+=("$n"); av+=("$v")
     done
-    [ $# -gt 0 ] || continue
+    # 代入だけの文なら覚える。後ろにコマンドが続く前置き代入（D=/x rm -rf "$D"）は、そのコマンドの環境に入るだけで引数の展開には効かない
+    if [ $# -eq 0 ]; then
+      for i in "${!an[@]}"; do set_var "${an[$i]}" "${av[$i]}"; done
+      continue
+    fi
     # for / select / read で値が変わる変数は、前の代入の値を忘れて不明に戻す（d=/tmp/…; for d in ~/a; do rm -rf "$d"）
     case "$1" in
       for | select) [ $# -ge 2 ] && set_var "$2" '$(?)' ;;

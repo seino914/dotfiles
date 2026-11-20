@@ -207,6 +207,19 @@ g V09 ask  'd=/tmp/claude-1/x; d=$(pwd); rm -rf "$d"'   # 再代入で不明に�
 g V0A ask  'S=/tmp/claude-1/s; rm -rf "out-$S"'     # 途中の変数は解決しない
 g V0B ask  'd=/tmp/claude-1/x; for d in ~/a ~/b; do rm -rf "$d"; done'          # ループ変数に使い直したら不明に戻す
 g V0C ask  'd=/tmp/claude-1/x; ls | while read -r d; do rm -rf "$d"; done'     # read で使い直したときも同じ
+g V0M ask  'name=build; cd ~/Documents && rm -rf "$name"'   # 相対パスの変数は使う時点の cd 先で解決する
+g V0N ask  'cd ~/Dev/hobby && out=dist && cd /opt/app && rm -rf "$out"'
+g V0O none 'out=dist && rm -rf "$out" "$out/x"'
+g V0P none 'cd /tmp/claude-1 && out=dist && rm -rf "$out"'
+g V0Q none 'f=$(mktemp); rm -rf "$f"'                # オプション無しの mktemp
+g V0R none 'T=$(mktemp -d) && cd "$T" && git init -q; rm -rf "$T"'   # 一時領域へ cd して自分ごと消す
+g V0S deny 'cd ~/Dev/hobby/app && rm -rf ~/Dev/hobby/app'            # 一時領域の外は従来どおり
+g V0T deny 'rm -rf /tmp/claude-1/x' /tmp/claude-1/x                  # Claude の実際の cwd は一時領域でも対象
+g V0U ask  'D=/tmp/claude-1/x rm -rf "$D"/*'          # 前置き代入は引数の展開に効かない
+g V0V none 'D=/tmp/claude-1/x; D=/opt/y true; rm -rf "$D"/*'   # 前置き代入は前の値を上書きしない
+g V0W ask  'd=/tmp/claude-1/x; d=$(dirname "$f"); rm -rf "$d"'   # 空白で割れたコマンド置換の再代入で不明に戻る
+g V0X ask  'dir=/tmp/claude-1/b; dir=$(git rev-parse --show-toplevel); rm -rf "$dir/dist"'
+g V0Y deny 'cd /tmp/claude-1/x && rm -rf /tmp/claude-1/x' /private/tmp/claude-1/x   # /private の有無が違っても実際の cwd
 echo "# cd: 最後のリテラルの cd の行き先を基準にする（区切りは問わない）"
 g C01 none 'cd ~/Dev/hobby/app && rm -rf dist' "$HOME/Documents"
 g C02 none "cd $HOME/Dev/hobby/app && rm -rf dist" "$HOME/Documents"
