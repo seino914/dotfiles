@@ -55,7 +55,7 @@ model: sonnet
    - 新規（JS/TS）：最小の設定だけ（雛形は 2 で作成済み）。次の順で行う
      0. 雛形が ESLint（`eslint` 系の依存・`eslint.config.*`・`lint` スクリプト）を入れていたら外し、Biome に置き換える（新規は Biome にそろえ、ESLint と二重に持たない）
      1. `nix develop -c pnpm add -D --save-exact @biomejs/biome`（devDependency と `pnpm-lock.yaml` ができる。lockfile が無いと CI の `pnpm install --frozen-lockfile` が落ちる）
-     2. `nix develop -c pnpm exec biome init`（`biome.json` を作る）
+     2. `nix develop -c pnpm exec biome init`（`biome.json` を作る）。生成された `biome.json` の `vcs.enabled` と `vcs.useIgnoreFile` を `true` にする（既定は `false` で `.gitignore` を見ないため、`dev`・`build` 後の `.next/`・`dist/` 等の生成物まで検査してローカルの `lint` だけが落ちる。生成物の無い CI とも結果が食い違う）
      3. package.json に `"lint": "biome check ."`・`"format": "biome format --write ."` を足す（既にあれば置き換える）
      4. 生成直後は package.json 等が Biome の書式（タブ）と食い違い `biome check` が落ちるので、新規に限り `nix develop -c pnpm exec biome check --write .` で整える
      5. `pnpm-lock.yaml`・`biome.json` を `git add` する
