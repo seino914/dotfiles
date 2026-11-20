@@ -55,6 +55,7 @@
 
 - プロジェクト外に恒久的な影響が出るインストール（`brew install`・`npm install -g`・`nix profile install` 等）はユーザーの明示的な指示があるときのみ。グローバル（dotfiles の `nix/packages.nix` 等）への追加が要るなら提案に留める。lock ファイル管理のプロジェクトローカル依存（`npm install`・`pnpm add` 等）は通常どおりでよい
 - `sudo` は実行できない。必要ならコマンドを示してユーザーに依頼する
+- JS/TS のパッケージマネージャは pnpm を優先する。新規プロジェクトは必ず pnpm で作る（`npm init` / `npx create-*` ではなく `pnpm init` / `pnpm create *`・`pnpm dlx`）。既存プロジェクトは lockfile（`package-lock.json`・`yarn.lock` 等）が示すマネージャに合わせ、勝手に pnpm へ移行しない（移行は提案に留める）
 - 必要なツールはそのリポジトリの `flake.nix` devShell に宣言する（新規プロジェクトは `/nix-setup`）。Claude の Bash では direnv が効かないので `nix develop -c <cmd>` か `direnv exec . <cmd>` で実行する。一時的な確認は `nix shell nixpkgs#<pkg>` / `nix run` でよい
 
 # モデル運用ポリシー（オーケストレーター / 実装の分離）
