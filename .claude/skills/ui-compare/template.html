@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>画面比較</title>
+<style>
+:root{--bg:#fff;--fg:#1d1f23;--muted:#667085;--line:#d7dbe2;--panel:#f4f6f9;--accent:#2563eb;--bad:#b42318;--badbg:#fee4e2;--ok:#027a48;--okbg:#d1fadf}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#e6e8ec;--muted:#9aa3b2;--line:#2c313a;--panel:#1c2026;--accent:#6ea0ff;--bad:#ffb4ab;--badbg:#4a1d19;--ok:#7be0a8;--okbg:#103d27}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif}
+header{padding:16px 20px;border-bottom:1px solid var(--line)}
+h1{margin:0 0 4px;font-size:20px}
+.meta{color:var(--muted);font-size:12px}
+details{margin-top:8px}summary{cursor:pointer;color:var(--accent)}
+details ul{margin:6px 0 0;padding-left:20px;font:12px/1.5 ui-monospace,Menlo,monospace}
+.bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+.tab,.mode{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+.tab[aria-selected=true],.mode[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.badge{display:inline-block;margin-left:6px;padding:0 6px;border-radius:9px;font-size:11px;background:var(--okbg);color:var(--ok)}
+.badge.changed{background:var(--badbg);color:var(--bad)}
+.badge.fail{background:var(--badbg);color:var(--bad)}
+.modes{display:flex;gap:6px;align-items:center;padding:10px 20px;flex-wrap:wrap}
+.modes label{color:var(--muted);font-size:12px}
+.notice{margin:0 20px 10px;padding:8px 12px;border-radius:6px;background:var(--badbg);color:var(--bad)}
+#stage{padding:0 20px 40px;overflow:auto}
+.pair{display:flex;gap:16px;align-items:flex-start;width:max-content}
+.col h2{margin:0 0 6px;font-size:12px;color:var(--muted);font-weight:600}
+img,canvas{display:block;max-width:none;border:1px solid var(--line);background:#fff}
+.stack{position:relative;border:1px solid var(--line);overflow:hidden;background:#fff;touch-action:none}
+.stack img,.stack canvas{border:0;position:absolute;left:0;top:0}
+.stack .top{z-index:1}
+.handle{position:absolute;top:0;bottom:0;width:2px;background:var(--accent);z-index:2;cursor:ew-resize}
+.handle::after{content:"";position:absolute;top:50%;left:-9px;width:20px;height:36px;margin-top:-18px;border-radius:10px;background:var(--accent)}
+.opacity{display:flex;gap:10px;align-items:center;padding:0 20px 10px}
+.opacity[hidden]{display:none}
+.legend{color:var(--muted);font-size:12px;padding:0 20px 10px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <div class="meta" id="meta"></div>
+  <details id="files"><summary></summary><ul></ul></details>
+</header>
+<div class="bar" id="tabs" role="tablist"></div>
+<div class="modes" id="modes"></div>
+<div id="notice"></div>
+<div class="opacity" id="opacityRow" hidden><label for="op">不透明度（右端＝修正後）</label><input id="op" type="range" min="0" max="100" value="50"><span id="opv">50%</span></div>
+<div class="legend" id="legend" hidden>赤＝修正前後で変化した画素（各チャンネルの差が 16 超）。他は薄いグレースケール。</div>
+<div id="stage"></div>
+<script>
+/*__UI_COMPARE_DATA__*/
+const MODES = [['side', '左右並べ'], ['slider', 'スライダー'], ['diff', '差分ハイライト'], ['overlay', '重ね']];
+let cur = 0, mode = 'side', opacity = 50;
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k === 'text') e.textContent = v; else e.setAttribute(k, v); }
+  for (const c of kids) e.append(c);
+  return e;
+};
+const failed = (it) => !!(it.before.error || it.after.error) || !it.before.src || !it.after.src;
+const fmtDate = (s) => { try { return new Date(s).toLocaleString('ja-JP'); } catch { return s; } };
+
+document.title = '画面比較: ' + DATA.title;
+$('title').textContent = DATA.title;
+$('meta').textContent = `基準コミット ${DATA.baseShort}（修正前）→ 作業ツリー（修正後）／ 作成 ${fmtDate(DATA.createdAt)}`;
+$('files').querySelector('summary').textContent = `変更ファイル（${DATA.changedFiles.length}）`;
+for (const f of DATA.changedFiles) $('files').querySelector('ul').append(el('li', { text: f }));
+
+DATA.items.forEach((it, i) => {
+  const b = el('button', { class: 'tab', role: 'tab', 'data-i': i }, `${it.path} @${it.width}`);
+  const r = failed(it) ? el('span', { class: 'badge fail', text: '撮影失敗' })
+    : el('span', { class: 'badge' + (it.changeRatio > 0 ? ' changed' : ''), text: it.changeRatio === null ? '-' : it.changeRatio.toFixed(1) + '%' });
+  b.append(r);
+  b.onclick = () => { cur = i; render(); };
+  $('tabs').append(b);
+});
+MODES.forEach(([k, label], i) => {
+  const b = el('button', { class: 'mode', 'data-m': k, title: `キー ${i + 1}` }, `${i + 1} ${label}`);
+  b.onclick = () => { mode = k; render(); };
+  $('modes').append(b);
+});
+$('op').oninput = () => { opacity = +$('op').value; $('opv').textContent = opacity + '%'; render(); };
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
+  const i = '1234'.indexOf(e.key);
+  if (i >= 0) { mode = MODES[i][0]; render(); }
+});
+
+const loadImg = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+const mkImg = (src, cls) => { const im = el('img', cls ? { class: cls } : {}); im.src = src; return im; };
+
+async function diffCanvas(it) {
+  const [A, B] = await Promise.all([loadImg(it.before.src), loadImg(it.after.src)]);
+  const w = Math.max(A.width, B.width), h = Math.max(A.height, B.height);
+  const get = (im) => { const c = document.createElement('canvas'); c.width = w; c.height = h; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0); return x.getImageData(0, 0, w, h).data; };
+  const da = get(A), db = get(B);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); const out = x.createImageData(w, h); const o = out.data;
+  for (let y = 0; y < h; y++) for (let xx = 0; xx < w; xx++) {
+    const i = (y * w + xx) * 4;
+    const outA = xx >= A.width || y >= A.height, outB = xx >= B.width || y >= B.height;
+    let changed = false;
+    if (outA || outB) changed = outA !== outB;
+    else changed = Math.max(Math.abs(da[i] - db[i]), Math.abs(da[i + 1] - db[i + 1]), Math.abs(da[i + 2] - db[i + 2])) > 16;
+    if (changed) { o[i] = 230; o[i + 1] = 30; o[i + 2] = 30; o[i + 3] = 255; }
+    else if (outA && outB) { o[i] = o[i + 1] = o[i + 2] = 255; o[i + 3] = 255; }
+    else { const g = Math.round(0.3 * db[i] + 0.59 * db[i + 1] + 0.11 * db[i + 2]); const v = 255 - Math.round((255 - g) * 0.35); o[i] = o[i + 1] = o[i + 2] = v; o[i + 3] = 255; }
+  }
+  x.putImageData(out, 0, 0);
+  return c;
+}
+
+let token = 0;
+async function render() {
+  const t = ++token;
+  const it = DATA.items[cur];
+  document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(+b.dataset.i === cur)));
+  document.querySelectorAll('.mode').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === mode)));
+  $('opacityRow').hidden = mode !== 'overlay';
+  $('legend').hidden = mode !== 'diff';
+  const stage = $('stage'); stage.replaceChildren();
+  const nt = $('notice'); nt.replaceChildren();
+  const errs = [it.before.error && `修正前: ${it.before.error}`, it.after.error && `修正後: ${it.after.error}`].filter(Boolean);
+  if (errs.length) nt.append(el('div', { class: 'notice', text: '撮影に問題がありました（' + errs.join(' / ') + '）' }));
+  const reds = [it.before.redirectedTo && `修正前: → ${it.before.redirectedTo} へリダイレクト`, it.after.redirectedTo && `修正後: → ${it.after.redirectedTo} へリダイレクト`].filter(Boolean);
+  if (reds.length) nt.append(el('div', { class: 'notice', text: '要求したパスと違うページが撮られています（' + reds.join(' / ') + '）' }));
+  if (!it.before.src || !it.after.src) {
+    const only = it.before.src ? ['修正前', it.before.src] : it.after.src ? ['修正後', it.after.src] : null;
+    if (only) stage.append(el('div', { class: 'col' }, el('h2', { text: only[0] + 'のみ' }), mkImg(only[1])));
+    return;
+  }
+  if (mode === 'side') {
+    stage.append(el('div', { class: 'pair' },
+      el('div', { class: 'col' }, el('h2', { text: '修正前' }), mkImg(it.before.src)),
+      el('div', { class: 'col' }, el('h2', { text: '修正後' }), mkImg(it.after.src))));
+  } else if (mode === 'diff') {
+    const c = await diffCanvas(it);
+    if (t === token) stage.append(c);
+  } else {
+    const [A, B] = await Promise.all([loadImg(it.before.src), loadImg(it.after.src)]);
+    if (t !== token) return;
+    const w = Math.max(A.width, B.width), h = Math.max(A.height, B.height);
+    const box = el('div', { class: 'stack' }); box.style.width = w + 'px'; box.style.height = h + 'px';
+    A.className = ''; B.className = 'top';
+    box.append(A, B);
+    if (mode === 'overlay') {
+      B.style.opacity = opacity / 100;
+    } else {
+      const handle = el('div', { class: 'handle' });
+      const set = (x) => { x = Math.max(0, Math.min(w, x)); B.style.clipPath = `inset(0 0 0 ${x}px)`; handle.style.left = (x - 1) + 'px'; };
+      set(w / 2);
+      handle.onpointerdown = (e) => { handle.setPointerCapture(e.pointerId); };
+      handle.onpointermove = (e) => { if (handle.hasPointerCapture(e.pointerId)) set(e.clientX - box.getBoundingClientRect().left); };
+      box.onpointerdown = (e) => { if (e.target !== handle) set(e.clientX - box.getBoundingClientRect().left); };
+      box.append(handle);
+    }
+    stage.append(el('div', {}, el('h2', { class: 'meta', text: mode === 'slider' ? '左＝修正前 / 右＝修正後' : '下層＝修正前 / 上層＝修正後' }), box));
+  }
+}
+render();
+</script>
+</body>
+</html>
