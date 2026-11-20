@@ -26,11 +26,13 @@ const file = join(out, 'index.html');
 writeFileSync(file, html);
 
 const cell = (s) => (s.error ? `失敗(${s.error})` : 'ok');
+const redir = (s) => (s.redirectedTo ? `${s.redirectedTo} へリダイレクト` : '');
 console.log('');
 console.log('| パス | 幅 | 変化率 | 備考 |');
 console.log('|---|---|---|---|');
 for (const it of manifest.items) {
-  const note = [it.before.error && `修正前: ${cell(it.before)}`, it.after.error && `修正後: ${cell(it.after)}`].filter(Boolean).join(' / ');
+  const note = [it.before.error && `修正前: ${cell(it.before)}`, it.after.error && `修正後: ${cell(it.after)}`,
+    it.before.redirectedTo && `修正前: → ${redir(it.before)}`, it.after.redirectedTo && `修正後: → ${redir(it.after)}`].filter(Boolean).join(' / ');
   console.log(`| ${it.path} | ${it.width} | ${it.changeRatio === null ? '-' : it.changeRatio.toFixed(1) + '%'} | ${note} |`);
 }
 console.log('');

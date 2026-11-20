@@ -125,6 +125,8 @@ async function render() {
   const nt = $('notice'); nt.replaceChildren();
   const errs = [it.before.error && `修正前: ${it.before.error}`, it.after.error && `修正後: ${it.after.error}`].filter(Boolean);
   if (errs.length) nt.append(el('div', { class: 'notice', text: '撮影に問題がありました（' + errs.join(' / ') + '）' }));
+  const reds = [it.before.redirectedTo && `修正前: → ${it.before.redirectedTo} へリダイレクト`, it.after.redirectedTo && `修正後: → ${it.after.redirectedTo} へリダイレクト`].filter(Boolean);
+  if (reds.length) nt.append(el('div', { class: 'notice', text: '要求したパスと違うページが撮られています（' + reds.join(' / ') + '）' }));
   if (!it.before.src || !it.after.src) {
     const only = it.before.src ? ['修正前', it.before.src] : it.after.src ? ['修正後', it.after.src] : null;
     if (only) stage.append(el('div', { class: 'col' }, el('h2', { text: only[0] + 'のみ' }), mkImg(only[1])));

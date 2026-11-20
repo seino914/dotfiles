@@ -127,8 +127,17 @@ async function shoot(side, path, width) {
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }, session);
     await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 }, session);
     let loaderId = null, status = null;
+    // 通信中のもの（SWR / React Query 等の表示後の通信を待つため）。EventSource・WebSocket・Ping は常時つながるので数えない
+    const inflight = new Map(); // requestId → 開始時刻
+    let lastActivity = Date.now();
     off = onEvent((m) => {
       if (m.sessionId !== session) return;
+      if (m.method === 'Network.requestWillBeSent' && !['EventSource', 'WebSocket', 'Ping'].includes(m.params.type)) {
+        if (!inflight.has(m.params.requestId)) inflight.set(m.params.requestId, Date.now()); // リダイレクトは同じ ID で来る
+        lastActivity = Date.now();
+      } else if (m.method === 'Network.loadingFinished' || m.method === 'Network.loadingFailed') {
+        inflight.delete(m.params.requestId); lastActivity = Date.now();
+      }
       if (m.method === 'Network.responseReceived' && m.params.type === 'Document' && (!loaderId || m.params.loaderId === loaderId)) {
         status = m.params.response.status;
       }
@@ -144,6 +153,15 @@ async function shoot(side, path, width) {
     if (nav.errorText) { res.error = `接続エラー: ${nav.errorText}`; return [rel, res]; }
     if (!(await loaded)) { res.error = '読み込みが 30 秒以内に終わりませんでした'; return [rel, res]; }
     res.status = status;
+    // 通信が 0 件の状態が 500ms 続くまで待つ（上限 10 秒。打ち切っても撮影は続ける）。
+    // 3 秒を超えて続く通信はロングポーリング等の常時接続とみなして数えない（毎ページ上限まで待たないため）
+    const busy = () => [...inflight.values()].some((t) => Date.now() - t < 3000);
+    for (const t0 = Date.now(); Date.now() - t0 < 10000 && (busy() || Date.now() - lastActivity < 500);) await sleep(50);
+    // リダイレクト等で要求と違うページになっていないか（末尾スラッシュと # の違いは同一とみなす）
+    const fin = await send('Runtime.evaluate', { expression: 'location.pathname + location.search', returnByValue: true }, session);
+    const norm = (p) => p.replace(/\/+(?=\?|$)/, '') || '/';
+    const want = new URL(origin + path); const wantPath = norm(want.pathname + want.search);
+    if (typeof fin.result?.value === 'string' && norm(fin.result.value) !== wantPath) res.redirectedTo = fin.result.value;
     const ev = await send('Runtime.evaluate', { expression: FREEZE_JS, awaitPromise: true, returnByValue: true }, session);
     if (ev.exceptionDetails) { res.error = '描画待ちスクリプトの失敗'; return [rel, res]; }
     const height = ev.result.value;
@@ -190,7 +208,7 @@ async function main() {
       for (const side of ['before', 'after']) {
         const [, r] = await shoot(side, path, width);
         item[side] = r;
-        console.log(`  ${side} ${path} @${width}: ${r.error ? '失敗(' + r.error + ')' : 'ok'}`);
+        console.log(`  ${side} ${path} @${width}: ${r.error ? '失敗(' + r.error + ')' : 'ok'}${r.redirectedTo ? ' → ' + r.redirectedTo + ' へリダイレクト' : ''}`);
       }
       item.changeRatio = null;
       items.push(item);

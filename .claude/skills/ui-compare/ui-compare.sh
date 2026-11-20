@@ -18,7 +18,7 @@ usage() {
   --dir <相対パス>        アプリのディレクトリ（ルートからの相対。既定: カレントのルートからの位置）
   --after-url <origin>    起動済みの修正後サーバー（http://localhost か http://127.0.0.1 のみ）。指定時は修正後側を起動しない
   --start-after           既存の開発サーバーらしきものの確認を飛ばし、修正後側も自分で起動する
-                          （無指定で既存サーバーが見つかると、終了コード 3 で中止する）
+                          （無指定で既存サーバーが 1 つなら修正後として使い、2 つ以上なら終了コード 3 で中止する）
 環境変数 UI_COMPARE_CHROME で Chrome のパスを上書きできる。
 USAGE
 }
@@ -26,7 +26,7 @@ USAGE
 die() { echo "エラー: $*" >&2; exit 1; }
 
 TITLE="画面比較" SLUG="compare" BASE="HEAD" CMD="" WIDTHS="375,1280" DIR="" AFTER_URL=""
-DIR_GIVEN=0 START_AFTER=0
+DIR_GIVEN=0 START_AFTER=0 AFTER_NOTE=""
 PATHS=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -59,7 +59,7 @@ fi
 # --- 環境確認 ---
 git rev-parse --is-inside-work-tree >/dev/null 2>&1 || die "git リポジトリではありません"
 CHROME="${UI_COMPARE_CHROME:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
-[ -x "$CHROME" ] || die "Chrome が見つかりません: $CHROME（UI_COMPARE_CHROME で指定できます）"
+[ -x "$CHROME" ] || die "Chrome が見つかりません: ${CHROME}（UI_COMPARE_CHROME で指定できます）"
 command -v node >/dev/null || die "node が見つかりません"
 [ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ] || die "node 22 以上が必要です"
 command -v curl >/dev/null || die "curl が見つかりません"
@@ -77,7 +77,7 @@ BASE_SHORT="$(git rev-parse --short "$BASE_SHA")"
 
 # --- 既存の開発サーバーの確認（重い準備より前に行う） ---
 # cwd がアプリのディレクトリで、/ が 2xx/3xx の text/html を返すプロセスを EXISTING に列挙する（自分の祖先は除く）。
-# どれが修正後か推測できないので、見つかれば中止して --after-url / --start-after を求める。そのプロセスには触れない
+# ちょうど 1 つならそれを修正後として使う。2 つ以上はどれか推測できないので中止して --after-url / --start-after を求める。そのプロセスには触れない
 find_existing_servers() {
   local real pid line port res anc p cmdline
   real="$(cd "$1" && pwd -P)"
@@ -87,7 +87,7 @@ find_existing_servers() {
     p="$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' ' || true)"
     anc="$anc$p "
   done
-  EXISTING=""
+  EXISTING="" EXISTING_COUNT=0 EXISTING_URL="" EXISTING_PID=""
   pid=""
   while IFS= read -r line; do
     case "$line" in
@@ -100,7 +100,8 @@ find_existing_servers() {
           case "$res" in
             [23]??" text/html"*)
               cmdline="$(ps -o command= -p "$pid" 2>/dev/null | cut -c1-80 || true)"
-              EXISTING="${EXISTING}  http://localhost:$port  （pid $pid: ${cmdline:-?}）"$'\n' ;;
+              EXISTING="${EXISTING}  http://localhost:${port}  （pid ${pid}: ${cmdline:-?}）"$'\n'
+              EXISTING_COUNT=$((EXISTING_COUNT + 1)); EXISTING_URL="http://localhost:${port}"; EXISTING_PID="$pid" ;;
           esac
         done ;;
     esac
@@ -111,11 +112,14 @@ find_existing_servers() {
 
 if [ -z "$AFTER_URL" ] && [ "$START_AFTER" = 0 ]; then
   find_existing_servers "$ROOT${DIR:+/$DIR}"
-  if [ -n "$EXISTING" ]; then
+  if [ "$EXISTING_COUNT" = 1 ]; then
+    AFTER_URL="$EXISTING_URL"
+    AFTER_NOTE="既に動いていた ${EXISTING_URL}（pid ${EXISTING_PID}）を修正後として使った"
+  elif [ -n "$EXISTING" ]; then
     {
       echo "修正後のアプリのディレクトリ（${DIR:-.}）で、開発サーバーらしきものが既に動いています："
       printf '%s' "$EXISTING"
-      echo "同じフォルダで 2 本目を起動するとそのサーバーを乱すおそれがあるため、中止しました。"
+      echo "どれが修正後か分からず、同じフォルダで追加起動するとそのサーバーを乱すおそれがあるため、中止しました。"
       echo "修正後の画面として使うサーバーを --after-url <URL> で指定するか、どれも修正後の開発サーバーでなければ --start-after を付けて再実行してください。"
     } >&2
     exit 3
@@ -169,7 +173,7 @@ mkdir -p "$OUT" "$WORK/before"
 APP_AFTER="$ROOT${DIR:+/$DIR}"
 APP_BEFORE="$WORK/before${DIR:+/$DIR}"
 
-echo "[1/5] 修正前のソースを展開（基準 $BASE_SHORT）"
+echo "[1/5] 修正前のソースを展開（基準 ${BASE_SHORT}）"
 git archive "$BASE_SHA" | tar -x -C "$WORK/before"
 [ -f "$APP_BEFORE/package.json" ] || die "基準 $BASE_SHORT にアプリ（${DIR:-.}/package.json）がありません"
 if grep -qs 'filter=lfs' "$ROOT/.gitattributes" || [ -f "$ROOT/.gitmodules" ]; then
@@ -244,7 +248,7 @@ while :; do
   case "$fcur" in */*) fcur="${fcur%/*}" ;; *) fcur="" ;; esac
 done
 if [ -n "$FLAKE_DIR" ] && command -v nix >/dev/null; then
-  echo "devShell を確認: $FLAKE_DIR（初回の評価は遅いことがあります）"
+  echo "devShell を確認: ${FLAKE_DIR}（初回の評価は遅いことがあります）"
   # nix develop は外側の PATH を後ろに残すので、node が devShell（/nix/store）のものかで判定する。
   # --no-write-lock-file：flake.lock が無い・古いときも作業ツリーへ書き込まない
   # shellHook が stdout に案内を出すことがあるので、最後の行（command -v の結果）だけを見る
@@ -358,4 +362,5 @@ node "$SKILL_DIR/capture.mjs" "$WORK/capture-config.json"
 
 echo "[5/5] 比較 HTML を生成"
 node "$SKILL_DIR/build.mjs" "$OUT"
+[ -z "$AFTER_NOTE" ] || echo "$AFTER_NOTE"
 OK=1
