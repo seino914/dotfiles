@@ -119,7 +119,7 @@ nix flake update
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
 - `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
-- `/nix-setup`：新規プロジェクトの開発環境をNixのdevShell + direnvでセットアップする
+- `/nix-setup`：新規・既存プロジェクトの開発環境をNixのdevShell + direnvでセットアップし、linter / formatter・GitHub Actions の CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・マージ済みブランチ自動削除も用意する
 
 ### セットアップスクリプト
 - `bash .claude/setup.sh`：`.claude/`配下（gitが管理するファイルのみ）を`~/.claude`へシンボリックリンク

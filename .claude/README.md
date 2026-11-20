@@ -23,7 +23,7 @@
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
-| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ。`model: sonnet` |
+| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・ブランチ自動削除の用意を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
 | `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
