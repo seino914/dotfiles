@@ -118,7 +118,9 @@ model: sonnet
            run: gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers" -f "reviewers[]=$REVIEWER"
    ```
 
+11. **検証コマンドをプロジェクトの CLAUDE.md に書く**（無ければ作り、あれば追記）：実在するもの（`nix develop -c pnpm run lint` 等）だけ。以後のセッションはここに書かれたコマンドで検証する
+
 ## 検証と報告
 
-- 手順 5 の確認、新規では lint が exit 0、`nix run nixpkgs#actionlint` がエラー無し
+- `nix run nixpkgs#actionlint` がエラー無し
 - 報告：宣言したパッケージ、作成・変更したファイル、検証結果。途中からなら提案に留めたことと残した既存ファイルも
