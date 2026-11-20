@@ -76,7 +76,7 @@ BASE_SHORT="$(git rev-parse --short "$BASE_SHA")"
 [ -f "$ROOT/${DIR:+$DIR/}package.json" ] || die "アプリのディレクトリに package.json がありません: ${DIR:-.}"
 
 # --- 既存の開発サーバーの確認（重い準備より前に行う） ---
-# cwd がアプリのディレクトリで、/ が 2xx/3xx の text/html を返すプロセスを EXISTING に列挙する（自分の祖先は除く）。
+# cwd がアプリのディレクトリで、/ が 2xx の text/html か 3xx を返すプロセスを EXISTING に列挙する（自分の祖先は除く）。
 # ちょうど 1 つならそれを修正後として使う。2 つ以上はどれか推測できないので中止して --after-url / --start-after を求める。そのプロセスには触れない
 find_existing_servers() {
   local real pid line port res anc p cmdline
@@ -96,12 +96,13 @@ find_existing_servers() {
         [ "${line#n}" = "$real" ] && [ -n "$pid" ] || continue
         case "$anc" in *" $pid "*) continue ;; esac
         for port in $(lsof -a -p "$pid" -iTCP -sTCP:LISTEN -P -Fn 2>/dev/null | sed -n 's/^n.*:\([0-9][0-9]*\)$/\1/p' | sort -u); do
-          res="$(curl -s -o /dev/null --max-time 2 -w '%{http_code} %{content_type}' "http://localhost:$port/" 2>/dev/null || true)"
+          # 初回コンパイルで遅いことがあるので 10 秒待つ。リダイレクト（ログイン画面へ等）は Content-Type が無いことがあるので 3xx はそのまま数える
+          res="$(curl -s -o /dev/null --max-time 10 -w '%{http_code} %{content_type}' "http://localhost:$port/" 2>/dev/null || true)"
           case "$res" in
-            [23]??" text/html"*)
+            2??" text/html"* | 3??" "*)
               cmdline="$(ps -o command= -p "$pid" 2>/dev/null | cut -c1-80 || true)"
               EXISTING="${EXISTING}  http://localhost:${port}  （pid ${pid}: ${cmdline:-?}）"$'\n'
-              EXISTING_COUNT=$((EXISTING_COUNT + 1)); EXISTING_URL="http://localhost:${port}"; EXISTING_PID="$pid" ;;
+              EXISTING_COUNT=$((EXISTING_COUNT + 1)); EXISTING_URL="http://localhost:${port}"; EXISTING_PID="$pid: ${cmdline:-?}" ;;
           esac
         done ;;
     esac
@@ -114,7 +115,7 @@ if [ -z "$AFTER_URL" ] && [ "$START_AFTER" = 0 ]; then
   find_existing_servers "$ROOT${DIR:+/$DIR}"
   if [ "$EXISTING_COUNT" = 1 ]; then
     AFTER_URL="$EXISTING_URL"
-    AFTER_NOTE="既に動いていた ${EXISTING_URL}（pid ${EXISTING_PID}）を修正後として使った"
+    AFTER_NOTE="既に動いていた ${EXISTING_URL}（pid ${EXISTING_PID}）を修正後として使った（開発サーバーでなければ --start-after を付けて再実行する）"
   elif [ -n "$EXISTING" ]; then
     {
       echo "修正後のアプリのディレクトリ（${DIR:-.}）で、開発サーバーらしきものが既に動いています："
