@@ -51,7 +51,7 @@ dotfiles/
 │   ├── package.json       # 依存は web-push のみ
 │   └── pnpm-lock.yaml     # node_modules は activation 時に自動導入（gitignore）
 └── .claude/
-    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・ワークツリー・検証・レビューの範囲・秘密情報・Nix運用・モデル運用）
+    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・ワークツリー・検証・レビューの範囲・秘密情報・Nix運用・モデル運用・完了の合図）
     ├── settings.json      # permissions・env・フック登録・言語などの設定
     ├── setup.sh           # .claude/ 配下（gitが管理するファイル）を ~/.claude へシンボリックリンク
     ├── dev-roots          # 削除・作業ディレクトリ作成の許可ルートの唯一の定義（guard-destructive.sh・nix/home.nix・testsが読む）
@@ -74,6 +74,12 @@ dotfiles/
     │   ├── git-pull/
     │   │   ├── SKILL.md              # /git-pull スキル
     │   │   └── pull.sh               # /git-pull の本体スクリプト
+    │   ├── ui-compare/
+    │   │   ├── SKILL.md              # /ui-compare スキル
+    │   │   ├── ui-compare.sh         # 段取り（ソース展開・サーバー起動・後始末）
+    │   │   ├── capture.mjs           # ヘッドレス Chrome（CDP）で撮影・変化率計算
+    │   │   ├── build.mjs             # 比較 HTML の生成
+    │   │   └── template.html         # 比較ビューアのひな形
     │   └── nix-setup/SKILL.md        # /nix-setup スキル
     ├── tests/             # フックのテーブル駆動テストと /git-pull の挙動テスト（run.shで一括実行。~/.claude へは配布しない）
     └── README.md          # Claude Code設定の詳細ドキュメント（フックの契約・/prフロー・通知の設定）
@@ -119,7 +125,8 @@ nix flake update
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
 - `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
-- `/nix-setup`：新規・既存プロジェクトの開発環境をNixのdevShell + direnvでセットアップし、linter / formatter・GitHub Actions の CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・マージ済みブランチ自動削除も用意する
+- `/ui-compare`：最後のコミットの画面と今の作業ツリーの画面を撮り、修正前後を見比べる HTML を Claude Code の一時領域（`/private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/`）に作る（ユーザー起動限定。依存は Chrome と Node のみ。`flake.nix` があればその devShell で動かす）
+- `/nix-setup`：新規・既存（途中から入る）プロジェクトの開発環境をNixのdevShell + direnvでセットアップし、linter / formatter・GitHub Actions の CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・マージ済みブランチ自動削除も用意する
 
 ### セットアップスクリプト
 - `bash .claude/setup.sh`：`.claude/`配下（gitが管理するファイルのみ）を`~/.claude`へシンボリックリンク

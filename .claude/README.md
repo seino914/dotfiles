@@ -9,7 +9,7 @@
 | ファイル | 役割 |
 | :--- | :--- |
 | `settings.json` | Claude Code の設定（フック・model・permissions など） |
-| `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・ファイル削除とプロセス停止・ワークツリー・検証・レビューの範囲・秘密情報・パッケージ・モデル運用・要約時に残すこと） |
+| `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・ファイル削除とプロセス停止・ワークツリー・検証・レビューの範囲・秘密情報・パッケージ・モデル運用・要約時に残すこと・完了の合図） |
 | `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は `claude-notify/send-push.mjs`） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成・更新を条件つきで自動承認し、それ以外は拒否するフック |
 | `hooks/guard-destructive.sh` | ルート・ホーム・`~/.claude` の削除、`curl \| sh`、ディスク消去などの事故を止めるフック |
@@ -23,7 +23,8 @@
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
-| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・ブランチ自動削除の用意を含む）。`model: sonnet` |
+| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミット（既定 HEAD）の画面と今の作業ツリーの画面を、それぞれ開発サーバーを起動してヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる自己完結 HTML を Claude Code の一時領域 `/private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/<日時>_<slug>/index.html` に作る。プロジェクトに `flake.nix` があれば、依存のインストールと開発サーバーの起動はその devShell（`nix develop`）で行う。修正前はソースを `git archive` で一時ディレクトリへ展開して使い、作業ツリー・index・ref には書き込まない。プロジェクト内にはファイルを作らない。`disable-model-invocation: true` |
+| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：新規・既存（途中から入る）プロジェクトの Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・ブランチ自動削除の用意を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
 | `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
