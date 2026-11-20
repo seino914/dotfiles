@@ -253,7 +253,8 @@ if [ -n "$FLAKE_DIR" ] && command -v nix >/dev/null; then
   echo "devShell を確認: $FLAKE_DIR（初回の評価は遅いことがあります）"
   # nix develop は外側の PATH を後ろに残すので、node が devShell（/nix/store）のものかで判定する。
   # --no-write-lock-file：flake.lock が無い・古いときも作業ツリーへ書き込まない
-  node_in_shell="$(nix develop --no-write-lock-file "$FLAKE_DIR" -c sh -c 'command -v node' 2>/dev/null || true)"
+  # shellHook が stdout に案内を出すことがあるので、最後の行（command -v の結果）だけを見る
+  node_in_shell="$(nix develop --no-write-lock-file "$FLAKE_DIR" -c sh -c 'command -v node' 2>/dev/null | tail -n 1 || true)"
   if [ "${node_in_shell#/nix/store/}" != "$node_in_shell" ]; then
     RUN=(nix develop --no-write-lock-file "$FLAKE_DIR" -c)
     echo "  nix の devShell 経由で依存の準備と開発サーバーを実行します"
