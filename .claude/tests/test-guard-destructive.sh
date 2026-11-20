@@ -185,6 +185,19 @@ g R36 ask  'cd - && rm -rf x'
 g R37 none 'rm -f "$F"'
 g R38 none 'rm "$SCRATCH/x"'
 g R39 none 'rm -f $(ls *.bak)'
+echo "# 削除の範囲判定: 同じコマンドで先に代入した変数は値で判定する（一時領域の掃除で確認を出さない）"
+g V01 none 'd=/private/tmp/claude-501/x/scratchpad/a && rm -rf "$d"'
+g V02 none 'S=/private/tmp/claude-501/x/scratchpad; rm -rf "$S/e2e/app" "${S}/b"'
+g V03 none 'S=/tmp/claude-501/s; d=$S/v && mkdir -p "$d" && cd "$d" && rm -rf out-late'
+g V04 none 'export E=~/Dev/hobby/app; rm -rf "$E/dist"'
+g V05 deny 'd=~/Documents && rm -rf "$d"'
+g V06 deny 'd= && rm -rf "$d/"'                     # 空の変数 + / はルート
+g V07 ask  'd=/opt/x && rm -rf "$d"'                # 範囲外は従来どおり ask
+g V08 ask  'd=$(mktemp -d) && rm -rf "$d"'          # コマンド置換の値は不明
+g V09 ask  'd=/tmp/claude-1/x; d=$(pwd); rm -rf "$d"'   # 再代入で不明に戻る
+g V0A ask  'S=/tmp/claude-1/s; rm -rf "out-$S"'     # 途中の変数は解決しない
+g V0B ask  'd=/tmp/claude-1/x; for d in ~/a ~/b; do rm -rf "$d"; done'          # ループ変数に使い直したら不明に戻す
+g V0C ask  'd=/tmp/claude-1/x; ls | while read -r d; do rm -rf "$d"; done'     # read で使い直したときも同じ
 echo "# cd: 最後のリテラルの cd の行き先を基準にする（区切りは問わない）"
 g C01 none 'cd ~/Dev/hobby/app && rm -rf dist' "$HOME/Documents"
 g C02 none "cd $HOME/Dev/hobby/app && rm -rf dist" "$HOME/Documents"
