@@ -225,7 +225,8 @@ async function main() {
       const r = await send('Runtime.evaluate', {
         expression: DIFF_JS(du(item.before.file), du(item.after.file)), awaitPromise: true, returnByValue: true,
       }, sessionId);
-      if (!r.exceptionDetails) item.changeRatio = Math.round(r.result.value * 10) / 10;
+      // 0.05% 未満の小さな変化が 0.0%（変化なし）に丸められないよう、変化があれば最低 0.1 にする
+      if (!r.exceptionDetails) { const v = r.result.value; item.changeRatio = v > 0 ? Math.max(0.1, Math.round(v * 10) / 10) : 0; }
     } catch { /* 比較失敗は null のまま */ }
   }
 
