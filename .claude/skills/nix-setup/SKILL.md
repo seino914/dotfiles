@@ -18,7 +18,7 @@ model: sonnet
 2. **新規の JS/TS は、`flake.nix` 等を作る前に雛形を作る**（途中から・JS/TS 以外は飛ばす）。`create-next-app` は空でないフォルダに既知以外のファイル（`flake.nix`・`.envrc`・`flake.lock` 等）があると中止し、`create-vite` は既存ファイルがあると対話で「消して続行」を求める（テンプレートの `.gitignore` が後で足す `.direnv/` を上書きしうる）ため、先に雛形を作り、その後で 3 以降を行う（`.git` だけのフォルダは空とみなされる）
    - まだ devShell が無いので、一時的なツールで動かす（グローバルには入れない）：`nix shell nixpkgs#nodejs nixpkgs#pnpm -c pnpm create vite@latest . --template <テンプレート>` / `nix shell nixpkgs#nodejs nixpkgs#pnpm -c pnpm dlx create-next-app@latest . <オプション>`。`npx create-*`・`npm init` は使わない
    - git 未初期化なら、雛形の前に `git init` だけ先に行う（`.git` だけのフォルダは空とみなされるので干渉しない。リポジトリの外で動かすと create-next-app が自分で `git init` から初回コミットまで行ってしまう）。create-next-app には念のため `--disable-git` も付ける
-   - `.git` 以外のファイル（`CLAUDE.md`・`.claude/`・`README.md` 等）が既にあるときは、`.` ではなく一時的なサブディレクトリ（例：`_scaffold`）に雛形を作ってから中身（ドットファイルを含む）をルートへ移し、サブディレクトリを消す。同名のファイルは上書きせず、`.gitignore` 等は追記でまとめる（迷ったら AskUserQuestion）。既存ファイルを消すフラグ（create-vite の `--overwrite` 等）は使わない
+   - 雛形は `.git` だけの空のフォルダでだけ作る。`.git` 以外のファイル（`CLAUDE.md`・`.claude/`・`README.md` 等）が既にあるときは雛形を作らずに止め、AskUserQuestion でどうするか聞く。既存ファイルを消すフラグ（create-vite の `--overwrite` 等）は使わない
    - Claude の Bash は非対話なので、ディレクトリ・テンプレート等を引数で明示する。実行前に `--help` で非対話用のフラグ（`--yes`・`--no-interactive` 等。ツールと版で違う）を確かめて付ける。対話待ちで止まったら中断して AskUserQuestion でユーザーに聞く
    - 開発サーバーまで起動するオプション（create-vite の `--immediate` 等）は付けない（常駐して Bash が戻らない）。依存のインストールは雛形に任せず、後で `nix develop -c pnpm install` で行ってよい。雛形がインストールまで走らせる場合も pnpm で行う（npm は使わない）
 
@@ -50,12 +50,13 @@ model: sonnet
 7. **検証する**。`nix flake lock` で `flake.lock` を生成し、`nix develop -c <ツール> --version` で devShell 内からツールが使えることを確認する。評価エラーの検出には `nix flake check` も使える
 
 8. **linter / formatter を用意する**。ツール本体は devShell か lockfile 管理の devDependency にし、グローバルには入れない
-   - **JS/TS のパッケージマネージャは pnpm を優先する（ユーザーの方針）**。新規は devShell に `nodejs` と `pnpm` を入れ、依存は `pnpm add` で入れる（npm は使わない）。途中からは既存の lockfile（`package-lock.json`・`yarn.lock` 等）に合わせ、勝手に pnpm へ移行しない（移行は報告で提案に留める）。Dependabot のエコシステムは pnpm でも `npm`
+   - **JS/TS のパッケージマネージャは pnpm を優先する（ユーザーの方針）**。新規は devShell に `nodejs` と `pnpm` を入れ、依存は `pnpm add` で入れる（npm は使わない）。途中からは既存の lockfile（`package-lock.json`・`yarn.lock` 等）に合わせ、勝手に pnpm へ移行しない（移行は報告で提案に留める）。既に pnpm のプロジェクトでは、devShell の pnpm を `package.json` の `packageManager` 欄や `pnpm-lock.yaml` に合うメジャー（`pnpm_10`・`pnpm_11` 等）にする（nixpkgs の `pnpm` は最新メジャーなので、版が違うと CI の `pnpm install --frozen-lockfile` が落ちうる）。合うメジャーが nixpkgs に無い（`pnpm_9` は削除済み）とき、または版を決められないとき（`packageManager` 欄が無く、lockfile の `lockfileVersion` だけでは決まらない）は、推測せず AskUserQuestion で聞く。Dependabot のエコシステムは pnpm でも `npm`
    - JS/TS は **Biome**（`@biomejs/biome` を devDependency で固定。エディタ拡張がそれを拾う）。Python は **Ruff**（devShell に `pkgs.ruff`。CI では `ruff check .` と `ruff format --check .`）、Go は gofmt と go vet（CI では `test -z "$(gofmt -l .)"` と `go vet ./...`。`gofmt` 単体は差分があっても exit 0 なので検査にならない）。定番の無い言語は AskUserQuestion で聞く
    - 新規（JS/TS）：最小の設定だけ（雛形は 2 で作成済み）。次の順で行う
+     0. 雛形が ESLint（`eslint` 系の依存・`eslint.config.*`・`lint` スクリプト）を入れていたら外し、Biome に置き換える（新規は Biome にそろえ、ESLint と二重に持たない）
      1. `nix develop -c pnpm add -D --save-exact @biomejs/biome`（devDependency と `pnpm-lock.yaml` ができる。lockfile が無いと CI の `pnpm install --frozen-lockfile` が落ちる）
      2. `nix develop -c pnpm exec biome init`（`biome.json` を作る）
-     3. package.json に `"lint": "biome check ."`・`"format": "biome format --write ."` を足す
+     3. package.json に `"lint": "biome check ."`・`"format": "biome format --write ."` を足す（既にあれば置き換える）
      4. 生成直後は package.json 等が Biome の書式（タブ）と食い違い `biome check` が落ちるので、新規に限り `nix develop -c pnpm exec biome check --write .` で整える
      5. `pnpm-lock.yaml`・`biome.json` を `git add` する
    - 途中から：既に linter / formatter（ESLint・Prettier・Biome・Ruff・flake8 等）があれば**置き換えず**それを使う。無ければ定番を入れるが、既存コード全体の自動整形（`--write` 等）は**実行せず**、報告で提案に留める
