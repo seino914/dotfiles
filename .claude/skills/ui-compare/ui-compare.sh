@@ -1,9 +1,6 @@
 #!/bin/bash
-# /ui-compare スキルの本体。最後のコミット（既定 HEAD）の画面（修正前）と今の作業ツリーの画面（修正後）を
-# ヘッドレス Chrome で撮り、見比べる HTML を /private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/<日時>_<slug>/ に作る。
-# このスクリプト自身は作業ツリー・index・ref に書き込まない（修正前は git archive で一時ディレクトリへ展開する）。
-# ただし修正後側の開発サーバーは作業ツリーで起動するので、それが作るキャッシュや書き換えるファイルは別。
-# 依存は bash・git・curl・node(>=22)・Chrome のみ（flake.nix があれば nix も使い、その devShell で依存の準備と開発サーバーを動かす）。
+# /ui-compare スキルの本体（概要は SKILL.md）。修正前は git archive で一時ディレクトリへ展開し、作業ツリー・index・ref には書き込まない。
+# 依存は bash・git・curl・node(>=22)・Chrome（flake.nix があれば nix develop 経由で動かす）。
 
 set -euo pipefail
 
@@ -79,12 +76,8 @@ BASE_SHORT="$(git rev-parse --short "$BASE_SHA")"
 [ -f "$ROOT/${DIR:+$DIR/}package.json" ] || die "アプリのディレクトリに package.json がありません: ${DIR:-.}"
 
 # --- 既存の開発サーバーの確認（重い準備より前に行う） ---
-# 修正後のアプリのディレクトリで、ユーザーが起動した開発サーバーらしきもの（cwd がそのディレクトリで、
-# TCP を LISTEN し、/ が 2xx/3xx の text/html を返すプロセス）を EXISTING に列挙する。
-# 見つかっても使わない：どれが修正後の画面か推測できない（API サーバー・Storybook・古いビルドの preview 等もありうる）ため、
-# 中止して --after-url（または --start-after）の指定を求める。そのプロセスには触れない。
-# 自分の祖先（Claude Code 本体など。cwd がプロジェクトで localhost を LISTEN している）は除く。
-# 検出はヒューリスティックで、見逃し（/ がヘッダなしでリダイレクトする・初回コンパイル中で 2 秒以内に応答しない等）はありうる
+# cwd がアプリのディレクトリで、/ が 2xx/3xx の text/html を返すプロセスを EXISTING に列挙する（自分の祖先は除く）。
+# どれが修正後か推測できないので、見つかれば中止して --after-url / --start-after を求める。そのプロセスには触れない
 find_existing_servers() {
   local real pid line port res anc p cmdline
   real="$(cd "$1" && pwd -P)"

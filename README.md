@@ -125,8 +125,8 @@ nix flake update
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
 - `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
-- `/ui-compare`：最後のコミットの画面と今の作業ツリーの画面を撮り、修正前後を見比べる HTML を Claude Code の一時領域（`/private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/`）に作る（ユーザー起動限定。依存は Chrome と Node のみ。`flake.nix` があればその devShell で動かす）
-- `/nix-setup`：新規・既存（途中から入る）プロジェクトの開発環境をNixのdevShell + direnvでセットアップし、linter / formatter・GitHub Actions の CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・マージ済みブランチ自動削除も用意する
+- `/ui-compare`：最後のコミットと今の作業ツリーの画面を撮り、修正前後を見比べる HTML を一時領域に作る（ユーザー起動限定）
+- `/nix-setup`：開発環境を Nix の devShell + direnv で用意し、linter / formatter・CI・Dependabot・マージ済みブランチ自動削除も整える
 
 ### セットアップスクリプト
 - `bash .claude/setup.sh`：`.claude/`配下（gitが管理するファイルのみ）を`~/.claude`へシンボリックリンク

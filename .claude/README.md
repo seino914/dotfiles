@@ -23,8 +23,8 @@
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
-| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミット（既定 HEAD）の画面と今の作業ツリーの画面を、それぞれ開発サーバーを起動してヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる自己完結 HTML を Claude Code の一時領域 `/private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/<日時>_<slug>/index.html` に作る。プロジェクトに `flake.nix` があれば、依存のインストールと開発サーバーの起動はその devShell（`nix develop`）で行う。修正前はソースを `git archive` で一時ディレクトリへ展開して使い、スクリプト自身は作業ツリー・index・ref に書き込まず、プロジェクト内にファイルを作らない（修正後側の開発サーバーは作業ツリーで動くので、それが作るキャッシュ等は別）。`disable-model-invocation: true` |
-| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：新規・既存（途中から入る）プロジェクトの Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot（毎週月曜にまとめて PR、Dependabot の PR だけにレビュー依頼）・ブランチ自動削除の用意を含む）。`model: sonnet` |
+| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミットと作業ツリーの画面をヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる HTML を一時領域に作る。`disable-model-invocation: true` |
+| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot・ブランチ自動削除を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
 | `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
@@ -114,7 +114,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - ask：
   - 作業ルート（`dev-roots`）と一時領域（`$TMPDIR`・`/tmp/claude-*`）の外の削除（`/tmp` 直下を含む）
   - ホーム直下の単一ファイルの削除
-  - 対象を解決できない（変数・コマンド置換・cd 先が不明な）再帰削除。ただし同じコマンドの中で先に代入した変数（`d=/tmp/claude-…/x && rm -rf "$d"`）は値に置き換えて判定するので、一時領域の掃除では確認を出さない
+  - 対象を解決できない（変数・コマンド置換・cd 先が不明な）再帰削除（同じコマンドで先に代入した変数 `d=/path && rm -rf "$d"` は値で判定する）
   - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`
   - `pkill` / `killall`、`kill -1`
 - 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける（`if` / `then` / `do` / `{` / `(` 等の制御構文の語は読み飛ばし、その後ろのコマンドを見る）。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
