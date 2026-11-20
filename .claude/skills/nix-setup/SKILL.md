@@ -6,24 +6,24 @@ model: sonnet
 
 # 開発環境セットアップ（Nix + direnv）
 
-新規・既存（途中から入る）プロジェクトの開発環境を用意するときは、PCのグローバル環境を汚さないことを最優先とし、必要なツール・ランタイムはすべてNixのdevShellで宣言管理する。グローバルへのインストール（`brew install`・`npm install -g` 等）で済ませない。
+PCのグローバル環境を汚さないことを最優先とし、必要なツール・ランタイムはすべてNixのdevShellで宣言管理する。グローバルへのインストール（`brew install`・`npm install -g` 等）で済ませない。
+
+ユーザーの開発はほぼ TypeScript（パッケージマネージャは pnpm）で、たまに Python。手順はこの 2 つを前提にした汎用的なもので、細部はプロジェクトに合わせて判断する。C# / Unity 等の他の言語は devShell に向かないことが多いので、何を用意するか AskUserQuestion で聞く。
 
 ## 手順
 
-1. **新規か途中からかを判定する**（最初に行う）。ソースコードや依存の定義（`package.json`・`pyproject.toml`・`go.mod`・`Cargo.toml` や `src/` 等）が既にあれば**途中から**、ほぼ空なら**新規**。判断できなければ AskUserQuestion で聞く。以降の 8〜12 は次の方針で作る：
+1. **新規か途中からかを判定する**。ソースコードや依存の定義（`package.json`・`pyproject.toml`・`src/` 等）が既にあれば**途中から**、ほぼ空なら**新規**。判断できなければ AskUserQuestion で聞く
    - **新規**：型と最低限の設定だけ。中身をぎっちり書かない
-   - **途中から**：プロジェクトの中身に合わせる。**既存の設定・ワークフローは上書きしない**（足りないものだけ追加するか、変更案を AskUserQuestion で確認する）。ファイル名が違っても同じ役割のもの（`test.yml`・`build.yml` 等の既存 CI、`renovate.json`・`.github/renovate.json` 等の Renovate）が既にあれば、`ci.yml`・`dependabot.yml` は作らずに報告する（二重に走る・更新 PR が二重に来るため）
-   - コマンドはすべて `nix develop -c <コマンド>` で実行する（素の `npx` 等はグローバルの Node で動いて devShell と版がずれる）。devShell ができる前の 2 の雛形作成だけは `nix shell` で動かす
+   - **途中から**：**既存の設定・ワークフローは上書きしない**。足りないものだけ足すか、変更案を AskUserQuestion で確認する。同じ役割のもの（既存の CI、Renovate 等）があれば、`ci.yml`・`dependabot.yml` は作らずに報告する
+   - devShell ができた後のコマンドは `nix develop -c <コマンド>` で実行する（素の `npx` 等はグローバルの Node で動いて devShell と版がずれる）
 
-2. **新規の JS/TS は、`flake.nix` 等を作る前に雛形を作る**（途中から・JS/TS 以外は飛ばす）。`create-next-app` は空でないフォルダに既知以外のファイル（`flake.nix`・`.envrc`・`flake.lock` 等）があると中止し、`create-vite` は既存ファイルがあると対話で「消して続行」を求める（テンプレートの `.gitignore` が後で足す `.direnv/` を上書きしうる）ため、先に雛形を作り、その後で 3 以降を行う（`.git` だけのフォルダは空とみなされる）
-   - まだ devShell が無いので、一時的なツールで動かす（グローバルには入れない）：`nix shell nixpkgs#nodejs nixpkgs#pnpm -c pnpm create vite@latest . --template <テンプレート>` / `nix shell nixpkgs#nodejs nixpkgs#pnpm -c pnpm dlx create-next-app@latest . <オプション>`。`npx create-*`・`npm init` は使わない
-   - git 未初期化なら、雛形の前に `git init` だけ先に行う（`.git` だけのフォルダは空とみなされるので干渉しない。リポジトリの外で動かすと create-next-app が自分で `git init` から初回コミットまで行ってしまう）。create-next-app には念のため `--disable-git` も付ける
-   - 雛形は `.git` だけの空のフォルダでだけ作る。`.git` 以外のファイル（`CLAUDE.md`・`.claude/`・`README.md` 等）が既にあるときは雛形を作らずに止め、AskUserQuestion でどうするか聞く。既存ファイルを消すフラグ（create-vite の `--overwrite` 等）は使わない
-   - Claude の Bash は非対話なので、ディレクトリ・テンプレート等を引数で明示する。実行前に `--help` で非対話用のフラグ（`--yes`・`--no-interactive` 等。ツールと版で違う）を確かめて付ける。対話待ちで止まったら中断して AskUserQuestion でユーザーに聞く
-   - 開発サーバーまで起動するオプション（create-vite の `--immediate` 等）は付けない（常駐して Bash が戻らない）。依存のインストールは雛形に任せず、後で `nix develop -c pnpm install` で行ってよい。雛形がインストールまで走らせる場合も pnpm で行う（npm は使わない）
+2. **新規の TypeScript で雛形（create-vite・create-next-app 等）を使うなら、`flake.nix` 等より先に作る**（雛形のツールは既存ファイルがあると止まったり上書きを求めたりするため）
+   - git 未初期化なら先に `git init` する（`.git` だけのフォルダは空とみなされる）
+   - `.git` 以外のファイルが既にあれば雛形を作らずに止め、AskUserQuestion で聞く。既存ファイルを消すフラグ（`--overwrite` 等）は使わない
+   - devShell がまだ無いので `nix shell nixpkgs#nodejs nixpkgs#pnpm -c pnpm create <雛形> .`（`pnpm dlx create-next-app@latest .` 等）で動かす。`npx`・`npm` は使わない
+   - Claude の Bash は非対話なので、`--help` で非対話用のフラグを確かめて引数で明示する。開発サーバーまで起動するオプションは付けない。対話待ちで止まったら中断して AskUserQuestion で聞く
 
-3. **必要なツールを決める**。プロジェクトの言語・パッケージ定義（`package.json`・`pyproject.toml` 等）から必要なランタイム・CLI を洗い出す。判断できなければ AskUserQuestion で確認する
-4. **`flake.nix` の devShell（`pkgs.mkShell`）に宣言する**。既に `flake.nix` がある場合はその devShell に追記する。無ければ以下の雛形で作る（nixpkgs は dotfiles と同じ `nixpkgs-unstable` 系列）：
+3. **`flake.nix` の devShell に必要なツールを宣言する**。既に `flake.nix` があればその devShell に追記する。無ければ次の雛形で作る（nixpkgs は dotfiles と同じ `nixpkgs-unstable` 系列）：
 
    ```nix
    {
@@ -31,41 +31,38 @@ model: sonnet
      inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
      outputs = { self, nixpkgs }:
        let
-         systems = [ "aarch64-darwin" "x86_64-linux" ];
+         systems = [ "aarch64-darwin" "x86_64-linux" ];   # x86_64-linux は CI（ubuntu-latest）用
          forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
        in {
          devShells = forAllSystems (pkgs: {
            default = pkgs.mkShell {
-             packages = with pkgs; [ /* JS/TS なら nodejs と pnpm など */ ];
+             packages = with pkgs; [ nodejs pnpm ];   # Python なら python3 と ruff 等
            };
          });
        };
    }
    ```
 
-5. **direnv を併用する**。プロジェクトルートに `use flake` と書いた `.envrc` を作成し、`.gitignore` に `.direnv/` を追加する（既存の `.gitignore`（雛形が作ったものを含む）には追記し、上書きしない）。`direnv allow` は Claude が内容を確認した `.envrc` に対してのみ実行する（direnv 本体と nix-direnv は dotfiles の home-manager で導入済み）
-   - ユーザーの対話シェルでは `cd` で自動的に devShell が ON / OFF になる
-   - **Claude Code の Bash は非対話で direnv フックが効かない**。Claude 自身がツールを使うときは `nix develop -c <cmd>` または `direnv exec . <cmd>` で実行する
-6. **git に追跡させる**。flake は git 追跡ファイルしか認識しないため、git 未初期化なら `git init` し、`git add flake.nix .envrc` する（ステージングで足りる。コミットはしない）。`flake.lock` も生成後に `git add` し、コミット対象にして再現性を担保する
-7. **検証する**。`nix flake lock` で `flake.lock` を生成し、`nix develop -c <ツール> --version` で devShell 内からツールが使えることを確認する。評価エラーの検出には `nix flake check` も使える
+   - **pnpm の版**：新規は nixpkgs の `pnpm`（最新メジャー）でよい。既存の pnpm プロジェクトは、`package.json` の `packageManager` 欄や lockfile に合うメジャー（`pnpm_10`・`pnpm_11` 等）にする（版が違うと CI の `pnpm install --frozen-lockfile` が落ちうる）。決められないときは AskUserQuestion で聞く
+   - 既存の npm・yarn のプロジェクトは lockfile に合わせ、勝手に pnpm へ移行しない（移行は報告で提案に留める）
 
-8. **linter / formatter を用意する**。ツール本体は devShell か lockfile 管理の devDependency にし、グローバルには入れない
-   - **JS/TS のパッケージマネージャは pnpm を優先する（ユーザーの方針）**。新規は devShell に `nodejs` と `pnpm` を入れ、依存は `pnpm add` で入れる（npm は使わない）。途中からは既存の lockfile（`package-lock.json`・`yarn.lock` 等）に合わせ、勝手に pnpm へ移行しない（移行は報告で提案に留める）。既に pnpm のプロジェクトでは、devShell の pnpm を `package.json` の `packageManager` 欄や `pnpm-lock.yaml` に合うメジャー（`pnpm_10`・`pnpm_11` 等）にする（nixpkgs の `pnpm` は最新メジャーなので、版が違うと CI の `pnpm install --frozen-lockfile` が落ちうる）。合うメジャーが nixpkgs に無い（`pnpm_9` は削除済み）とき、または版を決められないとき（`packageManager` 欄が無く、lockfile の `lockfileVersion` だけでは決まらない）は、推測せず AskUserQuestion で聞く。Dependabot のエコシステムは pnpm でも `npm`
-   - JS/TS は **Biome**（`@biomejs/biome` を devDependency で固定。エディタ拡張がそれを拾う）。Python は **Ruff**（devShell に `pkgs.ruff`。CI では `ruff check .` と `ruff format --check .`）、Go は gofmt と go vet（CI では `test -z "$(gofmt -l .)"` と `go vet ./...`。`gofmt` 単体は差分があっても exit 0 なので検査にならない）。定番の無い言語は AskUserQuestion で聞く
-   - 新規（JS/TS）：最小の設定だけ（雛形は 2 で作成済み）。次の順で行う
-     0. 雛形が ESLint（`eslint` 系の依存・`eslint.config.*`・`lint` スクリプト）を入れていたら外し、Biome に置き換える（新規は Biome にそろえ、ESLint と二重に持たない）
-     1. `nix develop -c pnpm add -D --save-exact @biomejs/biome`（devDependency と `pnpm-lock.yaml` ができる。lockfile が無いと CI の `pnpm install --frozen-lockfile` が落ちる）
-     2. `nix develop -c pnpm exec biome init`（`biome.json` を作る）。生成された `biome.json` の `vcs.enabled` と `vcs.useIgnoreFile` を `true` にする（既定は `false` で `.gitignore` を見ないため、`dev`・`build` 後の `.next/`・`dist/` 等の生成物まで検査してローカルの `lint` だけが落ちる。生成物の無い CI とも結果が食い違う）
-     3. package.json に `"lint": "biome check ."`・`"format": "biome format --write ."` を足す（既にあれば置き換える）
-     4. 生成直後は package.json 等が Biome の書式（タブ）と食い違い `biome check` が落ちるので、新規に限り `nix develop -c pnpm exec biome check --write .` で整える
-     5. `pnpm-lock.yaml`・`biome.json` を `git add` する
-   - 途中から：既に linter / formatter（ESLint・Prettier・Biome・Ruff・flake8 等）があれば**置き換えず**それを使う。無ければ定番を入れるが、既存コード全体の自動整形（`--write` 等）は**実行せず**、報告で提案に留める
-9. **CI（`.github/workflows/ci.yml`）を作る**。デフォルトブランチへの push と pull_request で動く「型」を作るのが主目的。実行環境は Nix（ローカルと同じツールを使うため、`nix develop -c <コマンド>` で実行する）。キャッシュ用アクションは入れない（廃止・有償化されたものがあり、型には不要）
-   - 新規：checkout → Nix 導入 →（devDependency を使うなら）依存のインストール → lint。テスト・ビルドはコメントの雛形にする
-   - 途中から：ステップは package.json scripts・Makefile 等の**実在するコマンド**（lint・typecheck・test・build）に合わせる。依存のインストールは lockfile に合わせる（`pnpm-lock.yaml` なら `pnpm install --frozen-lockfile` で devShell に `pnpm` を足す、等）
-   - `branches` には `git branch --show-current`（新規）／デフォルトブランチ名（途中から）を入れる。`git init` の既定が `master` のこともあるので `main` と決め打ちしない
-   - CI の `ubuntu-latest` は `x86_64-linux` なので、flake の `systems` に `x86_64-linux` が含まれていることを確認する（既存の flake で無ければ足す。無いと CI の `nix develop` が devShell を見つけられず落ちる）
-   - アクションのバージョンは作成時点の最新メジャーを `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` で確認する（2026-11-20 時点：`actions/checkout@v7`、`DeterminateSystems/nix-installer-action@v23`。dotfiles と同じ Determinate Nix を入れる。メンテ中であることを確認済み）
+4. **direnv を併用する**。`use flake` と書いた `.envrc` を作り、`.gitignore` に `.direnv/` を追記する（既存の `.gitignore` は上書きしない）。`direnv allow` は Claude が内容を確認した `.envrc` に対してのみ実行する（direnv 本体と nix-direnv は dotfiles の home-manager で導入済み）。Claude Code の Bash では direnv フックが効かないので、Claude 自身は `nix develop -c <cmd>` で実行する
+
+5. **git に追跡させて検証する**。flake は git 追跡ファイルしか読まないので `git add flake.nix .envrc` する（コミットはしない）。`nix flake lock` で `flake.lock` を作って `git add` し、`nix develop -c <ツール> --version` で devShell からツールが使えることを確かめる
+
+6. **linter / formatter を用意する**。本体は devShell か lockfile 管理の devDependency にする
+   - **TypeScript は Biome**。途中からで既に ESLint・Prettier・Biome 等があれば**置き換えず**それを使い、既存コード全体の自動整形はせず提案に留める。新規は次のとおり：
+     1. 雛形が別の linter（ESLint・oxlint 等の依存・設定ファイル・`lint` スクリプト）を入れていたら外す（Biome と二重に持たない）
+     2. `nix develop -c pnpm add -D --save-exact @biomejs/biome` → `nix develop -c pnpm exec biome init`
+     3. `biome.json` の `vcs.enabled` と `vcs.useIgnoreFile` が `true` であることを確かめる（`false` だと `.gitignore` を見ず、`.next/`・`dist/` 等の生成物まで検査する）。Tailwind CSS を使っていれば `"css": { "parser": { "tailwindDirectives": true } }` を足す
+     4. package.json に `"lint": "biome check ."`・`"format": "biome format --write ."` を足す（既にあれば置き換える）
+     5. `nix develop -c pnpm exec biome check --write .` で整えたあと、`nix develop -c pnpm run lint` が exit 0 になるまで直す。`--write` で消えない指摘は、雛形のコードや静的ファイルを直して通す（例：SVG に `<title>` を足す）。ルールの無効化・除外の追加では通さない
+   - **Python は Ruff**（devShell に `ruff`。CI では `ruff check .` と `ruff format --check .`）
+
+7. **CI（`.github/workflows/ci.yml`）を作る**。デフォルトブランチへの push と pull_request で動く「型」。`nix develop -c` でローカルと同じツールを使う。キャッシュ用アクションは入れない
+   - 新規は依存のインストールと lint だけ。テスト・ビルドはコメントにしておく。途中からは package.json scripts 等の**実在するコマンド**に合わせる
+   - `branches` には実際のデフォルトブランチ名を入れる（`main` と決め打ちしない）
+   - アクションは作成時点の最新メジャーを `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` で確かめる（2026-11-20 時点：`actions/checkout@v7`、`DeterminateSystems/nix-installer-action@v23`）
 
    ```yaml
    name: CI
@@ -82,49 +79,36 @@ model: sonnet
          - uses: actions/checkout@v7
          - uses: DeterminateSystems/nix-installer-action@v23
          - name: Install
-           run: nix develop -c pnpm install --frozen-lockfile   # JS/TS（pnpm）の例。途中からは lockfile に合わせて置き換える（Ruff 等 devShell のツールだけなら不要）
+           run: nix develop -c pnpm install --frozen-lockfile   # Python なら不要か、uv sync 等に置き換える
          - name: Lint
-           run: nix develop -c pnpm run lint
-         # テスト・ビルドは必要になったら足す
+           run: nix develop -c pnpm run lint                    # Python なら ruff check . と ruff format --check .
          # - run: nix develop -c pnpm test
    ```
 
-   - `biome` や eslint など devDependency のコマンドを使うなら、先に依存のインストール（`pnpm install --frozen-lockfile` 等）のステップを `nix develop -c` で足す（lockfile を `git add` しておく）
-10. **Dependabot（`.github/dependabot.yml`）を作る**。`github-actions` ＋プロジェクトの言語（`npm` / `pip` / `gomod` / `cargo` 等）を週 1 回の最小設定で。言語のエントリは**マニフェスト（`package.json`・`go.mod` 等）が実在するときだけ**足す（無いと Dependabot が失敗する。新規でまだ無ければ `github-actions` だけにし、後から足すよう報告する）。途中から：`directory` は実際の構成に合わせる（モノレポなら各パッケージの場所）
-
-   - **ユーザーの決定**：更新は**毎週月曜**に、エコシステムごとに**1 つの PR にまとめて**出す（各エントリに `day: monday` と、全依存を対象にした `groups`）。複数のエコシステムをまたいで 1 本にはまとまらないので、エコシステムの数だけ PR が来る
-   - **Dependabot が作った PR には必ずユーザーのアカウントへレビュー依頼を出す**。`dependabot.yml` の `reviewers` は GitHub が 2025 年に廃止したので使えない。12 のワークフローで行う（CODEOWNERS は Dependabot 以外の PR にも効くので使わない）
+8. **Dependabot（`.github/dependabot.yml`）を作る**。`github-actions` と、マニフェスト（`package.json`・`pyproject.toml` 等）が実在する言語（pnpm でも `npm`、Python は `pip`）だけ。マニフェストが無いエントリは Dependabot が失敗するので足さない
+   - **ユーザーの決定**：更新は**毎週月曜**に、エコシステムごとに**1 つの PR にまとめて**出す（`day: monday` と全依存を対象にした `groups`）
 
    ```yaml
    version: 2
    updates:
      - package-ecosystem: github-actions
        directory: /
-       schedule:
-         interval: weekly
-         day: monday
-         time: "09:00"
-         timezone: Asia/Tokyo
+       schedule: { interval: weekly, day: monday, time: "09:00", timezone: Asia/Tokyo }
        groups:
          github-actions:
            patterns: ["*"]
      - package-ecosystem: npm
        directory: /
-       schedule:
-         interval: weekly
-         day: monday
-         time: "09:00"
-         timezone: Asia/Tokyo
+       schedule: { interval: weekly, day: monday, time: "09:00", timezone: Asia/Tokyo }
        groups:
          npm:
            patterns: ["*"]
    ```
 
-11. **マージ済みブランチの自動削除を配る**。`~/Dev/seino914/dotfiles/.github/workflows/delete-merged-branch.yml` を `.github/workflows/` へコピーする（そのパスに無ければ飛ばして報告）。既にあれば上書きしない
-12. **Dependabot の PR にだけレビュー依頼を出すワークフローを置く**（`.github/workflows/dependabot-review-request.yml`）。PR の作成者が `dependabot[bot]` のときだけ、ユーザーのアカウント（`gh api user --jq .login` で確かめる。このユーザーは `seino914`）をレビュアーに追加する。人や Claude が作った PR には何もしない
-   - トリガーは `pull_request`。Dependabot 起点のトークンは既定で読み取り専用だが、`permissions` で `pull-requests: write` を明示すれば書ける（GitHub のドキュメントどおり）。フォークからの PR では常に読み取り専用になるので、`pull_request_target` より安全。`pull_request_target` に変えない
-   - ワークフローはデフォルトブランチに入ってから効く
-   - 途中から：同名のファイルや、同じことをする既存の仕組み（CODEOWNERS で Dependabot の更新対象の所有者になっている等）があれば作らずに報告する
+9. **マージ済みブランチの自動削除を配る**。`~/Dev/seino914/dotfiles/.github/workflows/delete-merged-branch.yml` を `.github/workflows/` へコピーする（無ければ飛ばして報告。既にあれば上書きしない）
+
+10. **Dependabot の PR にだけレビュー依頼を出すワークフローを置く**（`.github/workflows/dependabot-review-request.yml`）。`dependabot.yml` の `reviewers` は GitHub が廃止したので使えず、CODEOWNERS は Dependabot 以外の PR にも効くので使わない。レビュアーはユーザーのアカウント（`gh api user --jq .login` で確かめる。このユーザーは `seino914`）
+   - トリガーは `pull_request` のまま（`pull_request_target` に変えない。フォークからの PR に書き込み権限を渡さないため）。ワークフローはデフォルトブランチに入ってから効く
 
    ```yaml
    name: Dependabot Review Request
@@ -148,12 +132,12 @@ model: sonnet
            run: gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers" -f "reviewers[]=$REVIEWER"
    ```
 
-## 検証（追加分）
+## 検証
 
-- 7 の検証に加えて `nix develop -c <linter> --version`（Biome なら `nix develop -c pnpm exec biome check .`）が動くこと
-- ワークフローの静的検査：`nix run nixpkgs#actionlint`（グローバルには入れない一時実行）。エラー無しにする
+- devShell からツールが使えること（手順 5）。新規では CI の Lint と同じコマンドが exit 0 で終わること（落ちたまま報告しない）
+- ワークフローの静的検査：`nix run nixpkgs#actionlint`（グローバルには入れない）。エラー無しにする
 - 新規ファイルは `git add` までにとどめる（コミットしない）
 
 ## 報告
 
-宣言したパッケージ、作成・変更したファイル（`flake.nix`・`.envrc`・`.gitignore`・`flake.lock`・`biome.json` 等の linter 設定・`.github/workflows/*.yml`・`.github/dependabot.yml`）、検証結果（actionlint 含む）を簡潔に報告する。`direnv allow` を実行した場合はその旨も伝える。途中から入れた場合は、提案に留めたこと（既存コード全体の整形など）と、上書きせず残した既存ファイルも書く。
+宣言したパッケージ、作成・変更したファイル、検証結果（actionlint 含む）を簡潔に報告する。`direnv allow` を実行した場合はその旨も伝える。途中から入れた場合は、提案に留めたことと、上書きせず残した既存ファイルも書く。
