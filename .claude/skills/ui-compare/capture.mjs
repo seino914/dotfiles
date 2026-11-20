@@ -111,25 +111,34 @@ function safeName(p) {
   return name;
 }
 
-async function shoot(session, side, path, width) {
+async function shoot(side, path, width) {
   const origin = cfg.sides[side];
   const rel = `${side}/${safeName(path)}_${width}.png`;
   const res = { file: null, status: null, height: null, error: null };
-  await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 }, session);
-  let loaderId = null, status = null;
-  const off = onEvent((m) => {
-    if (m.sessionId !== session) return;
-    if (m.method === 'Network.responseReceived' && m.params.type === 'Document' && (!loaderId || m.params.loaderId === loaderId)) {
-      status = m.params.response.status;
-    }
-  });
-  const loaded = new Promise((resolve) => {
-    const off2 = onEvent((m) => {
-      if (m.sessionId === session && m.method === 'Page.loadEventFired') { off2(); resolve(true); }
-    });
-    setTimeout(() => { off2(); resolve(false); }, 30000).unref();
-  });
+  // 撮影ごとに新しいブラウザコンテキストで撮るので、cookie・localStorage・前のページの遅れた通信は持ち越されない
+  // （修正前・修正後は同じ localhost でポートだけが違い、cookie はポートで分かれないため）
+  let contextId = null, targetId = null, off = () => {};
   try {
+    contextId = (await send('Target.createBrowserContext')).browserContextId;
+    targetId = (await send('Target.createTarget', { url: 'about:blank', browserContextId: contextId })).targetId;
+    const session = (await send('Target.attachToTarget', { targetId, flatten: true })).sessionId;
+    await send('Page.enable', {}, session);
+    await send('Network.enable', {}, session);
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }, session);
+    await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 }, session);
+    let loaderId = null, status = null;
+    off = onEvent((m) => {
+      if (m.sessionId !== session) return;
+      if (m.method === 'Network.responseReceived' && m.params.type === 'Document' && (!loaderId || m.params.loaderId === loaderId)) {
+        status = m.params.response.status;
+      }
+    });
+    const loaded = new Promise((resolve) => {
+      const off2 = onEvent((m) => {
+        if (m.sessionId === session && m.method === 'Page.loadEventFired') { off2(); resolve(true); }
+      });
+      setTimeout(() => { off2(); resolve(false); }, 30000).unref();
+    });
     const nav = await send('Page.navigate', { url: origin + path }, session);
     loaderId = nav.loaderId || null;
     if (nav.errorText) { res.error = `接続エラー: ${nav.errorText}`; return [rel, res]; }
@@ -148,6 +157,9 @@ async function shoot(session, side, path, width) {
     res.error = String(e.message || e);
   } finally {
     off();
+    // 後片付けの失敗は撮影結果に影響させない
+    if (targetId) { try { await send('Target.closeTarget', { targetId }); } catch { /* 無視 */ } }
+    if (contextId) { try { await send('Target.disposeBrowserContext', { browserContextId: contextId }); } catch { /* 無視 */ } }
   }
   return [rel, res];
 }
@@ -165,11 +177,10 @@ async function main() {
     }
   };
 
+  // このタブは変化率の計算（canvas 比較）専用。撮影は shoot() が撮影ごとのコンテキストで行う
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
   await send('Page.enable', {}, sessionId);
-  await send('Network.enable', {}, sessionId);
-  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] }, sessionId);
   for (const side of ['before', 'after']) mkdirSync(join(cfg.out, side), { recursive: true });
 
   const items = [];
@@ -177,7 +188,7 @@ async function main() {
     for (const width of cfg.widths) {
       const item = { path, width };
       for (const side of ['before', 'after']) {
-        const [, r] = await shoot(sessionId, side, path, width);
+        const [, r] = await shoot(side, path, width);
         item[side] = r;
         console.log(`  ${side} ${path} @${width}: ${r.error ? '失敗(' + r.error + ')' : 'ok'}`);
       }
