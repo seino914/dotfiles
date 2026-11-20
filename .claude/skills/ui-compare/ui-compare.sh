@@ -1,7 +1,8 @@
 #!/bin/bash
 # /ui-compare スキルの本体。最後のコミット（既定 HEAD）の画面（修正前）と今の作業ツリーの画面（修正後）を
 # ヘッドレス Chrome で撮り、見比べる HTML を /private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/<日時>_<slug>/ に作る。
-# 作業ツリー・index・ref には書き込まない（修正前は git archive で一時ディレクトリへ展開する）。
+# このスクリプト自身は作業ツリー・index・ref に書き込まない（修正前は git archive で一時ディレクトリへ展開する）。
+# ただし修正後側の開発サーバーは作業ツリーで起動するので、それが作るキャッシュや書き換えるファイルは別。
 # 依存は bash・git・curl・node(>=22)・Chrome のみ（flake.nix があれば nix も使い、その devShell で依存の準備と開発サーバーを動かす）。
 
 set -euo pipefail
