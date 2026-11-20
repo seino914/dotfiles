@@ -6,16 +6,17 @@ model: sonnet
 
 # 開発環境セットアップ（Nix + direnv）
 
-ツール・ランタイムはすべて devShell で宣言し、グローバルには入れない。前提は TypeScript（pnpm）とたまに Python。C# / Unity 等の他の言語は何を用意するか AskUserQuestion で聞く。
+前提は TypeScript（pnpm）とたまに Python。C# / Unity 等の他の言語は何を用意するか AskUserQuestion で聞く。依頼が一部（CI だけ・Dependabot だけ等）なら、その手順だけ行う。
 
 ## 手順
 
 1. **新規か途中からかを判定する**（`package.json`・`pyproject.toml`・`src/` 等があれば途中から。迷えば聞く）
    - 新規：型と最低限の設定だけ
    - 途中から：既存の設定・ワークフローは上書きせず、足りないものだけ足す。既存の CI や Renovate 等があれば `ci.yml`・`dependabot.yml` は作らずに報告する
+   - どちらでも、git 未初期化なら `git init`
 
 2. **新規の TypeScript で雛形（create-vite・create-next-app 等）を使うなら、`flake.nix` より先に作る**（既存ファイルがあると雛形が止まるため）
-   - git 未初期化なら先に `git init`。`.git` 以外のファイルがあれば作らずに聞く（`--overwrite` 等は使わない）
+   - `.git` 以外のファイルがあれば作らずに聞く（`--overwrite` 等は使わない）
    - `nix shell nixpkgs#nodejs nixpkgs#pnpm -c pnpm create <雛形> .` で動かす（`npx`・`npm` は使わない）。非対話のフラグを `--help` で確かめて明示し、開発サーバーを起動するオプションは付けない
 
 3. **`flake.nix` の devShell に宣言する**。既にあれば追記、無ければ次の雛形で作る：
