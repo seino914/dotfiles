@@ -74,6 +74,12 @@ dotfiles/
     │   ├── git-pull/
     │   │   ├── SKILL.md              # /git-pull スキル
     │   │   └── pull.sh               # /git-pull の本体スクリプト
+    │   ├── ui-compare/
+    │   │   ├── SKILL.md              # /ui-compare スキル
+    │   │   ├── ui-compare.sh         # 段取り（ソース展開・サーバー起動・後始末）
+    │   │   ├── capture.mjs           # ヘッドレス Chrome（CDP）で撮影・変化率計算
+    │   │   ├── build.mjs             # 比較 HTML の生成
+    │   │   └── template.html         # 比較ビューアのひな形
     │   └── nix-setup/SKILL.md        # /nix-setup スキル
     ├── tests/             # フックのテーブル駆動テストと /git-pull の挙動テスト（run.shで一括実行。~/.claude へは配布しない）
     └── README.md          # Claude Code設定の詳細ドキュメント（フックの契約・/prフロー・通知の設定）
@@ -119,6 +125,7 @@ nix flake update
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
 - `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
+- `/ui-compare`：最後のコミットの画面と今の作業ツリーの画面を撮り、修正前後を見比べる HTML を Claude Code の一時領域（`/private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/`）に作る（ユーザー起動限定。依存は Chrome と Node のみ）
 - `/nix-setup`：新規プロジェクトの開発環境をNixのdevShell + direnvでセットアップする
 
 ### セットアップスクリプト

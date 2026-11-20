@@ -23,6 +23,7 @@
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
+| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミット（既定 HEAD）の画面と今の作業ツリーの画面を、それぞれ開発サーバーを起動してヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる自己完結 HTML をClaude Code の一時領域 `/private/tmp/claude-<uid>/<プロジェクトの識別名>/ui-compare/<日時>_<slug>/index.html` に作る。修正前はソースを `git archive` で一時ディレクトリへ展開して使い、作業ツリー・index・ref には書き込まない。プロジェクト内にはファイルを作らない。`disable-model-invocation: true` |
 | `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
