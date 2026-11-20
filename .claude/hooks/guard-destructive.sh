@@ -254,7 +254,7 @@ fatal_strings() {
 
 # ---- 各コマンドを先頭語で見分けて判定する（引数: 判定する文字列。bash -c の中身で再帰する）----
 scan() { # 引数: 判定用文字列, その元の文字列
-  local text="$1" raw="$2" seg w a i inner rec dd sub f n st wt whole srcs last starts has_filter prot_name prev
+  local text="$1" raw="$2" seg w a i inner rec dd sub f n st wt whole srcs last starts has_filter prot_name prev v
   fatal_strings "$text"
   while IFS= read -r seg; do
     set -- $seg
@@ -268,12 +268,18 @@ scan() { # 引数: 判定用文字列, その元の文字列
     fi
     # 制御構文の語（if cd x; then rm …、do rm …、{ rm …; } 等）は読み飛ばし、その後ろのコマンドを先頭語として見る
     while [ $# -gt 0 ]; do case "$1" in then | do | else | elif | if | while | until | time | '{' | '!' | '(') shift ;; *) break ;; esac; done
-    # 変数の代入（d=/path、export S=/path）を覚え、以降の "$d" / "$S/x" を解決する（値がコマンド置換なら不明のまま）
+    # 変数の代入（d=/path、export S=/path）を覚え、以降の "$d" / "$S/x" を解決する（値がコマンド置換なら不明のまま。ただしパス引数の無い mktemp は一時領域）
     case "${1-}" in export | local | readonly | declare | typeset) shift; while [ $# -gt 0 ] && [ "${1#-}" != "$1" ]; do shift; done ;; esac
     while [ $# -gt 0 ]; do
       case "$1" in [A-Za-z_]*=*) ;; *) break ;; esac
       n=${1%%=*}; case "$n" in *[!A-Za-z0-9_]*) break ;; esac
-      set_var "$n" "${1#*=}"; shift
+      v=${1#*=}; shift
+      # パス引数の無い $(mktemp [-d] [-q] [-t 接頭辞]) は $TMPDIR 直下の固有の名前（一時領域）として扱う。それ以外のコマンド置換は不明
+      if [ "$v" = '$(mktemp' ]; then
+        while [ "${v%)}" = "$v" ] && [ $# -gt 0 ]; do v="$v $1"; shift; done
+        if [ -n "$tmpdir" ] && printf '%s' "$v" | grep -Eq '^\$\(mktemp( -[dq]+| -[dq]*t [^/ )]+)*\)$'; then v="$tmpdir/mktemp.X"; fi
+      fi
+      set_var "$n" "$v"
     done
     [ $# -gt 0 ] || continue
     # for / select / read で値が変わる変数は、前の代入の値を忘れて不明に戻す（d=/tmp/…; for d in ~/a; do rm -rf "$d"）

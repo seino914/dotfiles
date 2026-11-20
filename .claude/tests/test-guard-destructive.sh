@@ -193,7 +193,16 @@ g V04 none 'export E=~/Dev/hobby/app; rm -rf "$E/dist"'
 g V05 deny 'd=~/Documents && rm -rf "$d"'
 g V06 deny 'd= && rm -rf "$d/"'                     # 空の変数 + / はルート
 g V07 ask  'd=/opt/x && rm -rf "$d"'                # 範囲外は従来どおり ask
-g V08 ask  'd=$(mktemp -d) && rm -rf "$d"'          # コマンド置換の値は不明
+g V08 none 'd=$(mktemp -d) && rm -rf "$d"'          # パス引数の無い mktemp は一時領域
+g V0D none 'T=$(mktemp -d) && cd "$T" && ls && rm -rf "$T"/sub'
+g V0E none 'f=$(mktemp); echo x > "$f"; rm -f "$f"'
+g V0F none 'tmp="$(mktemp -q -d)"; rm -rf "$tmp"'
+g V0G none 'd=$(mktemp -d -t foo) && rm -rf "$d"'
+g V0L none 'd=$(mktemp -dt build) && rm -rf "$d"'   # まとめ書きのオプション
+g V0H ask  'd=$(mktemp -d /tmp/x.XXXX) && rm -rf "$d"'   # テンプレート指定は不明
+g V0I ask  'd=$(mktemp -d -p ~/Documents) && rm -rf "$d"'
+g V0J ask  'd=$(mktemp -d); d=$(pwd); rm -rf "$d"'       # 再代入で不明に戻る
+g V0K ask  'd=$(mktemp -d) && rm -rf "$d"/../..'         # 親へ出る形は正規化に従う
 g V09 ask  'd=/tmp/claude-1/x; d=$(pwd); rm -rf "$d"'   # 再代入で不明に戻る
 g V0A ask  'S=/tmp/claude-1/s; rm -rf "out-$S"'     # 途中の変数は解決しない
 g V0B ask  'd=/tmp/claude-1/x; for d in ~/a ~/b; do rm -rf "$d"; done'          # ループ変数に使い直したら不明に戻す
