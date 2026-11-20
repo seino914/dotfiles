@@ -55,11 +55,10 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 
 - `permissions.deny`：`~/.claude/claude-notify.json` などの秘密ファイル（SSH鍵・AWS認証情報・`.netrc`・`.npmrc`・主要な `.env` 変種。一覧は settings.json）の読み取りと `sudo` の実行を禁止
 - `permissions.ask`：`git commit` / `git push` / `gh pr create` / `gh pr new` / `gh pr edit` / `gh pr merge` に加え、プロジェクト外へ恒久的な変更を及ぼす `brew install` 系・`npm install -g` 系・`pip install --user`・`cargo` / `gem` / `go install`・`nix profile` の書き込み系・`nix-env` などを実行前に確認（一覧は settings.json）
-- `env.CLAUDE_CODE_SUBAGENT_MODEL`：`opus`（サブエージェントの既定モデル。実装は `sonnet`、検索は `haiku` を明示して落とす。Explore は `agents/Explore.md` で Haiku に固定）
 - `hooks`：`UserPromptExpansion` / `UserPromptSubmit` / `PreToolUse`(Bash) / `PermissionRequest`(Bash) / `Stop` で `hooks/pr-mode.sh`、`PreToolUse`(Bash) で `hooks/guard-destructive.sh`、`PostToolUse`(Edit|Write|NotebookEdit) で `hooks/validate-claude-config.sh`、`PostToolUse`(Edit|Write|NotebookEdit)・`PostToolUse`(Bash)・`Stop` で `hooks/verify-gate.sh`、`Stop` / `Notification`(matcher: `permission_prompt`) で `hooks/notify.sh`
   - 安全装置のフック（`pr-mode.sh`・`guard-destructive.sh` の `PreToolUse`）には `timeout: 10` と `onFailure: "block"`（v2.1.295。現時点では CHANGELOG のみに記載）を付けている。フックが起動できない・タイムアウト・想定外の exit コードのときに操作をブロックする設定で、フックが壊れても黙って素通りにならない。代償として、フックのファイルが消える・壊れると全 Bash が止まる。そのときの復旧は「緊急時の復旧（セーフモード）」を参照
 - `model`：`opus`（エイリアス。現在は Opus 5.5 に解決され、新しい Opus が出れば自動で追従する。Fable の使い分けは `CLAUDE.md` のモデル運用ポリシー）
-- `modelSettings`：モデルごとの `effortLevel`（`claude-opus-5-5` / `claude-fable-5-2` / `claude-sonnet-5-5` / `claude-haiku-5-5` のすべて `high`）。Opus 5.5 以降はトップレベルの `effortLevel` を無視して既定の medium で動くため、モデルごとに持つ。**新しいモデル（`opus` の解決先が変わったとき等）が出たら、`/effort high` を一度実行するか `modelSettings` に追記しないと medium で動く**
+- `modelSettings`：モデルごとの `effortLevel`（`claude-opus-5-5` / `claude-fable-5-2` は `high`、`claude-sonnet-5-5` / `claude-haiku-5-5` は `medium`）。Opus 5.5 以降はトップレベルの `effortLevel` を無視して既定の medium で動くため、モデルごとに持つ。**新しいモデル（`opus` の解決先が変わったとき等）が出たら、`/effort high` を一度実行するか `modelSettings` に追記しないと medium で動く**
 - `language`：`japanese`
 - トップレベルの `effortLevel` は置かない（`modelSettings` だけで管理）。`/effort` や `/config` が書き込んだ場合は `git diff` で確認し、不要なら消す
 - `permissions.defaultMode`：`auto`（方針として明示している。VSCode 拡張の `claudeCode.initialPermissionMode` は `auto` を受け付けないので設定しないこと）。`permissions.ask` ルールとフックの ask / deny は auto mode でも効く
