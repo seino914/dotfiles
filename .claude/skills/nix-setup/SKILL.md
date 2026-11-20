@@ -45,6 +45,7 @@ model: sonnet
    - **JS/TS のパッケージマネージャは pnpm を優先する（ユーザーの方針）**。新規は devShell に `nodejs` と `pnpm` を入れ、依存は `pnpm add` で入れる（npm は使わない）。途中からは既存の lockfile（`package-lock.json`・`yarn.lock` 等）に合わせ、勝手に pnpm へ移行しない（移行は報告で提案に留める）。Dependabot のエコシステムは pnpm でも `npm`
    - JS/TS は **Biome**（`@biomejs/biome` を devDependency で固定。エディタ拡張がそれを拾う）。Python は **Ruff**（devShell に `pkgs.ruff`。CI では `ruff check .` と `ruff format --check .`）、Go は gofmt と go vet（CI では `test -z "$(gofmt -l .)"` と `go vet ./...`。`gofmt` 単体は差分があっても exit 0 なので検査にならない）。定番の無い言語は AskUserQuestion で聞く
    - 新規（JS/TS）：最小の設定だけ。次の順で行う
+     0. 雛形を作るときも pnpm を使う（`nix develop -c pnpm create vite` / `nix develop -c pnpm dlx create-next-app` など。`npx create-*`・`npm init` は使わない）
      1. `nix develop -c pnpm add -D --save-exact @biomejs/biome`（devDependency と `pnpm-lock.yaml` ができる。lockfile が無いと CI の `pnpm install --frozen-lockfile` が落ちる）
      2. `nix develop -c pnpm exec biome init`（`biome.json` を作る）
      3. package.json に `"lint": "biome check ."`・`"format": "biome format --write ."` を足す
