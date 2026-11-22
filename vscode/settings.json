@@ -3,5 +3,6 @@
     "github.copilot.nextEditSuggestions.enabled": true,
     "explorer.confirmDelete": false,
     "explorer.confirmDragAndDrop": false,
-    "diffEditor.ignoreTrimWhitespace": false
+    "diffEditor.ignoreTrimWhitespace": false,
+    "claudeCode.preferredLocation": "panel"
 }
