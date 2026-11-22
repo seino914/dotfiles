@@ -23,7 +23,8 @@
 #                    cd 先で解決し、パス引数の無い $(mktemp) は一時領域）。
 #                    解決できない（それ以外の変数・コマンド置換・cd 先が不明）ものは再帰指定（-r）があるときだけ ask
 #   3. git / kill の ask …… reset --hard / clean -f / checkout・switch の -f / checkout・restore の全体指定（. :/ *）/
-#                    stash drop・clear / branch -D / rm の対象が .git / pkill・killall・kill -1
+#                    stash drop・clear / branch -D / rm の対象が .git / pkill・killall・kill -1。
+#                    git は対象のリポジトリ（-C の値、無ければ cd 先、無ければ cwd）が一時領域の中なら ask にしない
 #   4. 上記以外はすべて通す
 #
 # 判定材料:
@@ -263,7 +264,7 @@ fatal_strings() {
 
 # ---- 各コマンドを先頭語で見分けて判定する（引数: 判定する文字列。bash -c の中身で再帰する）----
 scan() { # 引数: 判定用文字列, その元の文字列
-  local text="$1" raw="$2" seg w a i inner rec dd sub f n st wt whole srcs last starts has_filter prot_name prev v an av
+  local text="$1" raw="$2" seg w a i inner rec dd sub f n st wt whole srcs last starts has_filter prot_name prev v an av gdir gwt r scoped
   fatal_strings "$text"
   while IFS= read -r seg; do
     set -- $seg
@@ -336,9 +337,27 @@ scan() { # 引数: 判定用文字列, その元の文字列
         done
         for a in ${starts:-.}; do check_find_start "$a"; done ;;
       git)
-        shift
-        while [ $# -gt 0 ]; do case "$1" in -C | -c | --git-dir | --work-tree | --namespace) shift; shift ;; -*) shift ;; *) break ;; esac; done
+        shift; gdir=""; gwt=0
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            -C) gdir=${2-}; shift; shift ;;
+            --git-dir | --work-tree) gwt=1; shift; shift ;;
+            --git-dir=* | --work-tree=*) gwt=1; shift ;;
+            -c | --namespace) shift; shift ;;
+            -*) shift ;;
+            *) break ;;
+          esac
+        done
         sub=${1-}; [ $# -gt 0 ] && shift
+        # 対象のリポジトリ（-C の値、無ければ同じコマンド内の cd 先、それも無ければ cwd）が一時領域の中なら、以下の git の ask は
+        # 出さない（スクラッチに clone した検証用リポジトリの reset --hard 等）。--git-dir / --work-tree 付きや場所が不明なら従来どおり。
+        # cd 先はサブシェルや popd で戻っても残るので、( か popd を含むコマンドでは cd 先に頼る判定（-C の相対パスを含む）をしない
+        scoped=0; case "${text//\$\(/}" in *'('* | *popd*) scoped=1 ;; esac
+        if [ "$scoped" -eq 1 ] && [ -n "$cd_base" ] && [ "${gdir#/}" = "$gdir" ]; then gwt=1; fi
+        if [ "$gwt" -eq 0 ]; then
+          if [ -n "$gdir" ]; then r=$(resolve "$gdir"); else case "$cd_base" in '') r=$cwd_n ;; *) r=$cd_base ;; esac; fi
+          case "$r" in '' | '?' | G:*) ;; *) in_tmp "$r" && continue ;; esac
+        fi
         case "$sub" in
           reset)
             case " $* " in *' --hard '* | *' --merge '*) ask 'git reset --hard / --merge: 作業ツリーの未コミット変更を破棄して指定のコミットへ戻すコマンドです。成果物が失われないか確認してください' ;; esac ;;
