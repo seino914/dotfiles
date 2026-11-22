@@ -185,6 +185,41 @@ g R36 ask  'cd - && rm -rf x'
 g R37 none 'rm -f "$F"'
 g R38 none 'rm "$SCRATCH/x"'
 g R39 none 'rm -f $(ls *.bak)'
+echo "# 削除の範囲判定: 同じコマンドで先に代入した変数は値で判定する（一時領域の掃除で確認を出さない）"
+g V01 none 'd=/private/tmp/claude-501/x/scratchpad/a && rm -rf "$d"'
+g V02 none 'S=/private/tmp/claude-501/x/scratchpad; rm -rf "$S/e2e/app" "${S}/b"'
+g V03 none 'S=/tmp/claude-501/s; d=$S/v && mkdir -p "$d" && cd "$d" && rm -rf out-late'
+g V04 none 'export E=~/Dev/hobby/app; rm -rf "$E/dist"'
+g V05 deny 'd=~/Documents && rm -rf "$d"'
+g V06 deny 'd= && rm -rf "$d/"'                     # 空の変数 + / はルート
+g V07 ask  'd=/opt/x && rm -rf "$d"'                # 範囲外は従来どおり ask
+g V08 none 'd=$(mktemp -d) && rm -rf "$d"'          # パス引数の無い mktemp は一時領域
+g V0D none 'T=$(mktemp -d) && cd "$T" && ls && rm -rf "$T"/sub'
+g V0E none 'f=$(mktemp); echo x > "$f"; rm -f "$f"'
+g V0F none 'tmp="$(mktemp -q -d)"; rm -rf "$tmp"'
+g V0G none 'd=$(mktemp -d -t foo) && rm -rf "$d"'
+g V0L none 'd=$(mktemp -dt build) && rm -rf "$d"'   # まとめ書きのオプション
+g V0H ask  'd=$(mktemp -d /tmp/x.XXXX) && rm -rf "$d"'   # テンプレート指定は不明
+g V0I ask  'd=$(mktemp -d -p ~/Documents) && rm -rf "$d"'
+g V0J ask  'd=$(mktemp -d); d=$(pwd); rm -rf "$d"'       # 再代入で不明に戻る
+g V0K ask  'd=$(mktemp -d) && rm -rf "$d"/../..'         # 親へ出る形は正規化に従う
+g V09 ask  'd=/tmp/claude-1/x; d=$(pwd); rm -rf "$d"'   # 再代入で不明に戻る
+g V0A ask  'S=/tmp/claude-1/s; rm -rf "out-$S"'     # 途中の変数は解決しない
+g V0B ask  'd=/tmp/claude-1/x; for d in ~/a ~/b; do rm -rf "$d"; done'          # ループ変数に使い直したら不明に戻す
+g V0C ask  'd=/tmp/claude-1/x; ls | while read -r d; do rm -rf "$d"; done'     # read で使い直したときも同じ
+g V0M ask  'name=build; cd ~/Documents && rm -rf "$name"'   # 相対パスの変数は使う時点の cd 先で解決する
+g V0N ask  'cd ~/Dev/hobby && out=dist && cd /opt/app && rm -rf "$out"'
+g V0O none 'out=dist && rm -rf "$out" "$out/x"'
+g V0P none 'cd /tmp/claude-1 && out=dist && rm -rf "$out"'
+g V0Q none 'f=$(mktemp); rm -rf "$f"'                # オプション無しの mktemp
+g V0R none 'T=$(mktemp -d) && cd "$T" && git init -q; rm -rf "$T"'   # 一時領域へ cd して自分ごと消す
+g V0S deny 'cd ~/Dev/hobby/app && rm -rf ~/Dev/hobby/app'            # 一時領域の外は従来どおり
+g V0T deny 'rm -rf /tmp/claude-1/x' /tmp/claude-1/x                  # Claude の実際の cwd は一時領域でも対象
+g V0U ask  'D=/tmp/claude-1/x rm -rf "$D"/*'          # 前置き代入は引数の展開に効かない
+g V0V none 'D=/tmp/claude-1/x; D=/opt/y true; rm -rf "$D"/*'   # 前置き代入は前の値を上書きしない
+g V0W ask  'd=/tmp/claude-1/x; d=$(dirname "$f"); rm -rf "$d"'   # 空白で割れたコマンド置換の再代入で不明に戻る
+g V0X ask  'dir=/tmp/claude-1/b; dir=$(git rev-parse --show-toplevel); rm -rf "$dir/dist"'
+g V0Y deny 'cd /tmp/claude-1/x && rm -rf /tmp/claude-1/x' /private/tmp/claude-1/x   # /private の有無が違っても実際の cwd
 echo "# cd: 最後のリテラルの cd の行き先を基準にする（区切りは問わない）"
 g C01 none 'cd ~/Dev/hobby/app && rm -rf dist' "$HOME/Documents"
 g C02 none "cd $HOME/Dev/hobby/app && rm -rf dist" "$HOME/Documents"

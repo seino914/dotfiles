@@ -9,7 +9,7 @@
 | ファイル | 役割 |
 | :--- | :--- |
 | `settings.json` | Claude Code の設定（フック・model・permissions など） |
-| `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・ファイル削除とプロセス停止・ワークツリー・検証・レビューの範囲・秘密情報・パッケージ・モデル運用・要約時に残すこと） |
+| `CLAUDE.md` | グローバル指示の実体（言語・Git操作の制限・ファイル削除とプロセス停止・ワークツリー・検証・レビューの範囲・秘密情報・パッケージ・モデル運用・要約時に残すこと・完了の合図） |
 | `hooks/notify.sh` | Stop / Notification 時に iPhone へプッシュ通知するフック（送信本体は `claude-notify/send-push.mjs`） |
 | `hooks/pr-mode.sh` | `/pr` 実行中だけ git commit / push / PR作成・更新を条件つきで自動承認し、それ以外は拒否するフック |
 | `hooks/guard-destructive.sh` | ルート・ホーム・`~/.claude` の削除、`curl \| sh`、ディスク消去などの事故を止めるフック |
@@ -23,7 +23,8 @@
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
-| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ。`model: sonnet` |
+| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミットと作業ツリーの画面をヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる HTML を一時領域に作る。`disable-model-invocation: true` |
+| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot・ブランチ自動削除を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
 | `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
@@ -113,7 +114,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - ask：
   - 作業ルート（`dev-roots`）と一時領域（`$TMPDIR`・`/tmp/claude-*`）の外の削除（`/tmp` 直下を含む）
   - ホーム直下の単一ファイルの削除
-  - 対象を解決できない（変数・コマンド置換・cd 先が不明な）再帰削除
+  - 対象を解決できない（変数・コマンド置換・cd 先が不明な）再帰削除（同じコマンドで先に代入した変数 `d=/path && rm -rf "$d"` は値で判定する。パス引数の無い `$(mktemp -d)` は一時領域として扱う）
   - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`
   - `pkill` / `killall`、`kill -1`
 - 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける（`if` / `then` / `do` / `{` / `(` 等の制御構文の語は読み飛ばし、その後ろのコマンドを見る）。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
