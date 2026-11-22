@@ -115,7 +115,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
   - 作業ルート（`dev-roots`）と一時領域（`$TMPDIR`・`/tmp/claude-*`）の外の削除（`/tmp` 直下を含む）
   - ホーム直下の単一ファイルの削除
   - 対象を解決できない（変数・コマンド置換・cd 先が不明な）再帰削除（同じコマンドで先に代入した変数 `d=/path && rm -rf "$d"` は値で判定する。パス引数の無い `$(mktemp -d)` は一時領域として扱う）
-  - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`
+  - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`（`.git` の `rm` 以外の git は、対象のリポジトリ（`-C` の値、無ければ同じコマンド内の `cd` 先、無ければ cwd）が一時領域の中なら出さない。スクラッチに clone した検証用リポジトリの `reset --hard` 等）
   - `pkill` / `killall`、`kill -1`
 - 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける（`if` / `then` / `do` / `{` / `(` 等の制御構文の語は読み飛ばし、その後ろのコマンドを見る）。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
 - 許可ルートの定義は `dev-roots` だけ（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`・`~/Dev/humanoid`）。理由文は「何をするコマンドか（対象を含む）」＋「なぜ確認が要るか」で書く

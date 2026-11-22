@@ -304,6 +304,23 @@ g A11 ask  'killall node'
 g A12 ask  'kill -9 -1'
 g A13 ask  'kill -KILL -1'
 g A14 deny 'killall Finder; rm -rf $HOME/Documents'        # ask 対象と deny 対象の混在は deny（格下げしない）
+# 対象のリポジトリが一時領域の中なら git の ask は出さない（スクラッチに clone した検証用リポジトリ）
+g A15 none 'git -C /tmp/claude-1/s/repo1 reset -q --hard HEAD~2'
+g A16 none 'cd /tmp/claude-1/s && git -C repo1 reset -q --hard HEAD~2'
+g A17 none 'T=/tmp/claude-1/s; cd $T && git clone -q https://example.com/r.git repo1 && git -C repo1 reset --hard HEAD~2'
+g A18 none 'cd "$TMPDIR/w/repo" && git clean -fdx && git checkout -- . && git branch -D feat/x'
+g A19 none 'git reset --hard HEAD~1' /tmp/claude-1/s/repo1          # cwd 自体が一時領域
+g A1A ask  'cd /tmp/claude-1/s && cd ~/Dev/hobby/app && git reset --hard'   # 最後の cd 先で判定
+g A1B ask  'git -C /tmp/claude-1/s/repo --work-tree=. reset --hard'   # --work-tree 付きは従来どおり
+g A1C ask  'cd $X && git reset --hard'                          # cd 先が不明
+g A1D ask  'git -C ~/Dev/hobby/app reset --hard' /tmp/claude-1/s       # -C が一時領域の外
+g A1E ask  'cd /tmp/claude-1/s; git reset --hard; git -C ~/Dev/hobby/app clean -fd'
+# サブシェル・popd で cd が戻ったあとは cwd の実リポジトリで実行されるので従来どおり（回帰: レビュー指摘）
+g A1F ask  '(cd /tmp/claude-1/s/repo1 && git log --oneline -3) && git reset --hard HEAD~1'
+g A1G ask  '( cd /tmp/claude-1/s && git clone -q https://example.com/r.git ); git checkout -- .'
+g A1H ask  'pushd /tmp/claude-1/s/repo1 && git log -1 && popd && git reset --hard origin/main'
+g A1I none '(cd /tmp/claude-1/s && ls) && git -C /tmp/claude-1/s/repo1 reset --hard'   # -C の絶対パスなら免除
+g A1J none 'T=$(mktemp -d) && cd "$T" && git init -q r && git -C r reset --hard'      # $( ) はサブシェル扱いしない
 echo "# 通すもの: 破壊的でない git・サブコマンドの rm・リテラルの中の語"
 g N01 none 'git rebase main'                               # 回帰: rebase は見ない
 g N02 none 'git rebase -i HEAD~3'
