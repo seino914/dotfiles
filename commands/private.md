@@ -8,6 +8,7 @@
 /readme
 /clean-branches
 /git-pull
+/merge-worktree
 /ui-compare
 /nix-setup
 ```

@@ -33,6 +33,7 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 # direnv: .envrc のあるディレクトリで devShell を自動ON/OFF
+# （~/.zshrc は programs.zsh ではなくこのファイルへのリンク管理のため、programs.direnv.enableZshIntegration では注入されない。ここに直書きする）
 if command -v direnv >/dev/null 2>&1; then
   eval "$(direnv hook zsh)"
 fi
