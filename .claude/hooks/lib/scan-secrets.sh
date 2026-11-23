@@ -32,6 +32,7 @@ printf '%s\n' "$diff" | awk '
     if (line ~ /AIza[0-9A-Za-z_-]{35}/) hit("Google API キー")
     if (line ~ /sk_live_[0-9A-Za-z]{10,}/) hit("Stripe 本番キー")
     if (line ~ /npm_[A-Za-z0-9]{36}/) hit("npm トークン")
+    if (line ~ /"privateKey"[ \t]*:[ \t]*"[A-Za-z0-9_-]{43}"/) hit("VAPID 秘密鍵")
     next
   }
   { pem = 0 }
