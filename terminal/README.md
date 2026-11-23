@@ -8,6 +8,7 @@ macOS 標準の Terminal.app のプロファイル（見た目の設定）。
     - 明るい 8 色（主に文字色）：変換しただけ（文字は暗くすると読みにくいため）
   - ディレクトリ欄の紫（256 色の 135 番）はパレットの外なので、`zsh/.p10k.zsh` の末尾で、Terminal.app のときだけ `POWERLEVEL9K_DIR_BACKGROUND='#9d53d4'` にしている
 - プロンプト行の左端のマーク（「[」）は表示しない（`ShowLineMarks = false`。アプリ全体の設定として `nix/darwin.nix` に書き、効く場所が確かめられていないためプロファイルにも入れてある）
+- タブが 1 つのときはタブバーを出さない（アプリ全体の設定として `nix/darwin.nix` に書いてある）
 - `darwin-rebuild switch` のたびに、`nix/darwin.nix` がこのファイルを「Dotfiles」プロファイルとして取り込み、既定と起動時のプロファイルにする。フォントは同じファイルの `fonts.packages` で入る
 - 反映は Terminal.app を再起動したあと。Terminal.app から switch したときに新しいプロファイルが出なければ、Terminal.app を終了して別のターミナル（VSCode 等）から switch し直す
 
