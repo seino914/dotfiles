@@ -11,7 +11,7 @@ Nix（nix-darwin + home-manager + nix-homebrew）でmacOS環境全体を宣言�
 | :--- | :--- |
 | [`../bootstrap.sh`](../bootstrap.sh) | 新しいMacの1コマンドセットアップ。`~/Dev/seino914` の作成・クローン・ユーザー名の自動書き換え・初回適用までを行う |
 | [`../flake.nix`](../flake.nix) | エントリポイント。nix-darwin / home-manager / nix-homebrew を統合し、機種に依存しない構成名 `mac` を定義。ユーザー名（`username`）はbootstrap.shがそのMacに合わせて自動で書き換える |
-| [`darwin.nix`](darwin.nix) | macOSのシステム設定。`system.defaults`（キーリピート・マウス感度・Dock・トラックパッド）と、`CustomUserPreferences` によるアプリ固有設定（Mosのスクロール反転等）、activation でのディスプレイ明るさ設定（自動調節オフ・バッテリー時に暗くしない） |
+| [`darwin.nix`](darwin.nix) | macOSのシステム設定。`system.defaults`（キーリピート・マウス感度・Dock・トラックパッド）と、`CustomUserPreferences` によるアプリ固有設定（Mosのスクロール反転等）、フォント（`fonts.packages`）、activation でのディスプレイ明るさ設定（自動調節オフ・バッテリー時に暗くしない）と Terminal.app のプロファイル取り込み |
 | [`packages.nix`](packages.nix) | CLIツール群（git・gh・Node.js・pnpm・Docker CLI等）。バージョンは `flake.lock` で固定される |
 | [`homebrew.nix`](homebrew.nix) | GUIアプリの宣言リスト。Homebrew cask（Chrome・VSCode・Devin Desktop・Mos等）と App Storeアプリ（`masApps`: LINE・Kindle）。Homebrew本体はnix-homebrewが導入するため手動インストール不要 |
 | [`home.nix`](home.nix) | home-manager設定。VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、direnv + nix-direnvの導入（`.envrc` のあるディレクトリでdevShellを自動ON/OFF）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行）、claude-notify の依存導入（`../claude-notify` で `pnpm install --frozen-lockfile`。失敗しても switch は止めない）、作業ディレクトリの作成（`devDirs` は [`../.claude/dev-roots`](../.claude/dev-roots) を `builtins.readFile` + `builtins.match` で読んで導出する。読み方は guard-destructive.sh・テストと同じで、`#` 以降・前後の空白・末尾の `/` を無視し `~/` 始まりの行だけ採る。現在は `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`・`~/Dev/humanoid`） |
@@ -51,7 +51,7 @@ sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 
 - 既存の `/opt/homebrew` は nix-homebrew の `autoMigrate = true` により自動で管理下へ取り込まれる
 - 既存のbrew formula（CLI）はNix側と重複しても自動削除されない（`cleanup = "none"`）。Nix側の動作確認後に `brew uninstall` で徐々に整理する
-- `~/.zshrc` は既定では管理しない（`home.nix` の `manageZshrc = false`。現用の `~/.zshrc` は旧 `~/dotfiles` へのリンクのまま使う決定事項）。このリポジトリの zsh 設定へ切り替えるときは `manageZshrc = true` にして適用する。手順は [`../zsh/README.md`](../zsh/README.md)
+- `~/.zshrc`・`~/.p10k.zsh` は `force = true` で `zsh/` へのリンクに置き換わる。oh-my-zsh・Powerlevel10k・プラグインは Nix では入れないので、先に `~/.oh-my-zsh` へ入れておく（[`../zsh/README.md`](../zsh/README.md)）
 
 ## よくある操作
 
@@ -69,6 +69,7 @@ sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 
 - nix-darwinが対応している項目 → `darwin.nix` の `system.defaults`
 - 対応していない項目・アプリ固有の設定 → `defaults read <ドメイン>` で採取した値を `CustomUserPreferences` に記述（Mosの例を参照）
+- フォント・色などバイナリの値を含む設定 → 実機から書き出したファイルをリポジトリに置き、`postActivation` で取り込む（Terminal.app の例。[`../terminal/README.md`](../terminal/README.md)）
 
 ### パッケージを更新する
 
@@ -82,7 +83,7 @@ sudo darwin-rebuild switch --flake .#mac
 
 ## 注意
 
-- direnvは`home.nix`の`programs.direnv`（nix-direnv併用）で導入している。`.envrc`のあるプロジェクトディレクトリに`cd`すると、そのプロジェクトの`flake.nix`のdevShellが自動で有効化/無効化される。ただし`~/.zshrc`はhome-manager非管理（現在は旧`~/dotfiles`への素のリンク。`manageZshrc = false`）のため`enableZshIntegration`ではzshフックが注入されず、フックはzsh設定に直接書く必要がある。**実際に効いているのは旧`~/dotfiles/zsh/.zshrc`側**で、切り替え後に備えて[`../zsh/.zshrc`](../zsh/.zshrc)にも同じフックを持たせてある
+- direnvは`home.nix`の`programs.direnv`（nix-direnv併用）で導入している。`.envrc`のあるプロジェクトディレクトリに`cd`すると、そのプロジェクトの`flake.nix`のdevShellが自動で有効化/無効化される。ただし`~/.zshrc`は`programs.zsh`ではなく[`../zsh/.zshrc`](../zsh/.zshrc)へのリンクで管理しているため、`enableZshIntegration`ではzshフックが注入されない。フックは`zsh/.zshrc`に直接書いてある
 - flakeは**gitに追跡されているファイルしか認識しない**。新しい `.nix` ファイルを追加したら `git add` してから適用すること。`home.nix` が `builtins.readFile` で読む [`../.claude/dev-roots`](../.claude/dev-roots) も同様で、変更したら `git add` してから `nix eval --raw .#darwinConfigurations.mac.system.drvPath` を通す
 - 作業ディレクトリ（`devDirs`）の定義は `.claude/dev-roots` 1か所だけ。同じファイルを `.claude/hooks/guard-destructive.sh` が「Claude Code が確認なしで削除できる許可ルート」として読むので、`home.nix` 側にディレクトリ名を直接書かないこと
 - リポジトリの配置は `~/Dev/seino914/dotfiles` 固定（`flake.nix` の `dotfilesPath` がユーザー名から自動で導かれる）。別の場所に置きたい場合は `dotfilesPath` と `bootstrap.sh` の両方を変更する

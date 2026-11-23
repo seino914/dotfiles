@@ -6,7 +6,7 @@ macOS環境全体をNix（nix-darwin + home-manager + nix-homebrew）で宣言�
 ## 技術スタック
 - Nix / nix-darwin / home-manager / nix-homebrew（macOS環境全体の宣言的管理。`flake.nix` + `nix/`）
 - Homebrew（GUIアプリのcaskとApp Storeアプリ。本体はnix-homebrewが導入）
-- Zsh（ターミナルプロンプト設定。現在このPCでは未適用。`zsh/README.md` 参照）
+- Zsh（oh-my-zsh + Powerlevel10k。`~/.zshrc`・`~/.p10k.zsh` へリンク。`zsh/README.md` 参照）
 - VSCode / Cursor（`vscode/`配下の共通設定をhome-manager経由で書き込み可能リンクし、拡張機能をactivation時に自動導入）
 - direnv / nix-direnv（`nix/home.nix`のhome-manager設定で導入。`.envrc`のあるプロジェクトディレクトリでflakeのdevShellを自動ON/OFF）
 - Bash（`bootstrap.sh`、`.claude/setup.sh`、`.claude/hooks/`配下のシェルスクリプト）
@@ -28,7 +28,7 @@ dotfiles/
 │   ├── darwin.nix         # macOSシステム設定（キーリピート・Dock・アプリ固有設定等）
 │   ├── packages.nix       # CLIツール（git・gh・Node.js等。Nixで管理）
 │   ├── homebrew.nix       # GUIアプリ（Homebrew cask・App Storeアプリ）
-│   └── home.nix           # home-manager設定（VSCode/Cursor設定のリンクと拡張機能導入・direnv導入・.claude/のリンク処理・claude-notifyの依存導入・作業ディレクトリ作成（`.claude/dev-roots` から導出）。~/.zshrc は manageZshrc で切り替え、既定は非管理）
+│   └── home.nix           # home-manager設定（VSCode/Cursor設定のリンクと拡張機能導入・direnv導入・.claude/のリンク処理・claude-notifyの依存導入・作業ディレクトリ作成（`.claude/dev-roots` から導出）・~/.zshrc と ~/.p10k.zsh のリンク）
 ├── vscode/
 │   ├── README.md          # VSCode/Cursor共通設定の詳細ドキュメント
 │   ├── settings.json      # エディタ設定の実体（両エディタで共有）
@@ -44,7 +44,8 @@ dotfiles/
 │   └── workflows/
 │       └── delete-merged-branch.yml # PRマージ後にheadブランチを自動削除（他リポジトリへ配布用だが、このリポジトリ自身のPRにも発火する）
 ├── zsh/
-│   ├── .zshrc             # プロンプト表示のカスタマイズ（このPCでは未適用。zsh/README.md 参照）
+│   ├── .zshrc             # zsh 設定（oh-my-zsh + Powerlevel10k・direnv フック。~/.zshrc へリンク）
+│   ├── .p10k.zsh          # Powerlevel10k のプロンプト設定（~/.p10k.zsh へリンク）
 │   └── README.md
 ├── claude-notify/         # iPhoneプッシュ通知の送信スクリプト（.claude/hooks/notify.sh から呼ばれる）
 │   ├── send-push.mjs      # Web Push送信本体（VAPID署名。設定は ~/.claude/claude-notify.json）
@@ -105,7 +106,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 `.claude/`配下のうちgitが管理するファイル（`setup.sh`・`README.md`・`tests/` 等の除外分を除く）が`~/.claude`へシンボリックリンクされる（`darwin-rebuild switch`時にはhome-manager activationからも自動実行される）。
 
 ### zsh設定
-このリポジトリの`zsh/.zshrc`は現在このPCでは未適用（`~/.zshrc`は旧`~/dotfiles`へのリンクのまま使う決定。`nix/home.nix`の`manageZshrc = false`）。切り替え手順と反映方法は[zsh/README.md](/zsh/README.md)を参照。
+`~/.zshrc`・`~/.p10k.zsh`は`zsh/`への書き込み可能リンク（`nix/home.nix`が張る）。oh-my-zsh・Powerlevel10k・プラグインは手で入れる前提。詳細は[zsh/README.md](/zsh/README.md)を参照。
 
 ## コマンド
 ### Nix環境
