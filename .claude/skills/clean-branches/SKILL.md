@@ -10,6 +10,7 @@ allowed-tools:
   - Bash(git worktree list:*)
   - Bash(git for-each-ref:*)
   - Bash(git checkout:*)
+  - Bash(git merge --ff-only:*)
   - Bash(git switch:*)
   - Bash(gh pr list:*)
 ---
@@ -34,12 +35,12 @@ allowed-tools:
 - `git branch --show-current` と `git worktree list --porcelain` で使用中のブランチを確認する
 - 保護対象を除いた削除候補の一覧を作る。候補が無ければ「削除対象なし」と報告して終了する
 
-### 2. 現在ブランチの退避
+### 2. デフォルトブランチへの退避と最新化
 
-現在のブランチがデフォルトブランチでない場合（削除候補かどうかに関わらず。`-d` のマージ済み判定は HEAD 基準のため）：
+`-d` のマージ済み判定は HEAD 基準のため、常にローカルのデフォルトブランチを最新にした状態で行う。
 
-- ワーキングツリーに未コミットの変更が無いことを `git status` で確認してからデフォルトブランチへ checkout する
-- 未コミットの変更がある場合は削除を中断し、状況をユーザーに報告する（stash や commit を勝手に行わない）
+- 現在のブランチがデフォルトブランチでない場合（削除候補かどうかに関わらず）：ワーキングツリーに未コミットの変更が無いことを `git status` で確認してからデフォルトブランチへ checkout する。未コミットの変更がある場合は削除を中断し、状況をユーザーに報告する（stash や commit を勝手に行わない）
+- 現在のブランチがデフォルトかどうかに関わらず、checkout の後に `git merge --ff-only origin/<デフォルトブランチ>` でローカルを最新化する（PR マージ後に /git-pull をしていないと、マージ済みのブランチまで `not fully merged` になるため）。ff できない場合（ローカル独自のコミットがある等）は削除を中断して報告する（reset 等を勝手に行わない）。`origin` が無いリポジトリではこの最新化を省く
 
 ### 3. 削除の実行
 
