@@ -8,6 +8,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `vscode/` — VSCode / Cursor 共通設定の実体。書き込み可能リンクで両エディタへ配る（詳細 `vscode/README.md`）
 - `git/ignore` — git 全体共通の ignore の実体（`~/.config/git/ignore` へ書き込み可能リンク。`.claude/settings.local.json` と `.claude/worktrees/` を除外）
 - `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills・agents・dev-roots・tests。一覧は `.claude/README.md`）
+- `terminal/` — Terminal.app のプロファイル（`darwin.nix` が switch のたびに取り込む。詳細 `terminal/README.md`）
 - `zsh/.zshrc` — プロンプト表示と direnv フック（**このPCでは未適用**。詳細は `zsh/README.md`）
 - `claude-notify/` — iPhoneへのWeb Push通知の送信側スクリプト（受信側PWAは別リポジトリ `claude-notify-mobile`）
 - `.github/workflows/` — 他リポジトリへコピーして使う配布用テンプレート。ただし `delete-merged-branch.yml` は**このリポジトリ自身のPRにも発火する**
