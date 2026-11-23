@@ -25,13 +25,6 @@ let
     };
   };
 
-  # ~/.zshrc をこのリポジトリの zsh/.zshrc へ切り替えるかどうか（既定: 切り替えない）。
-  # 現在は旧リポジトリ ~/dotfiles/zsh/.zshrc へのリンクを意図的に使っている（ユーザーの決定）。
-  # このリポジトリの zsh 設定へ移行すると決めたら true にして `sudo darwin-rebuild switch` を
-  # 実行するだけでよい（force = true で既存リンクを置き換える。手順は zsh/README.md）。
-  # ユーザーの指示なしに true にしないこと
-  manageZshrc = false;
-
   # ~/Dev 配下の作業用ルートディレクトリ。唯一の定義は .claude/dev-roots（1 行 1 パス、~/ 始まり。
   # guard-destructive.sh の削除許可ルートと同じファイルを読む）。新しいMacでも同じ配置で作業を
   # 始められるようにする（中身の各リポジトリは対象外）。flake は git 追跡ファイルしか読めないので、
@@ -50,10 +43,9 @@ in
   # home-managerの互換バージョン（変更しない）
   home.stateVersion = "25.05";
 
-  # ~/.zshrc は既定では管理しない（manageZshrc = false。上記コメント参照）。
-  # 以前あった無条件の .zshrc 宣言は旧リンクと衝突して activation 全体
-  # （VSCode/Cursor 設定・拡張機能・setup.sh・claude-notify）を止めていたため、
-  # トグル付き・force = true の形に置き換えた
+  # ~/.zshrc・~/.p10k.zsh は zsh/ への書き込み可能リンクにする（`p10k configure` の上書きも
+  # リポジトリへ入る）。force = true は、既存のリンクや実体を置き換えるために必要
+  # （force が無いと既存ファイルと衝突して activation 全体が止まる）
   # ~/.config/git/ignore（git 全体共通の ignore。git が既定の XDG パスとして読む）は
   # git/ignore への書き込み可能リンクにする。programs.git は使わない
   # （~/.gitconfig を home-manager 管理にしないため）。
@@ -66,10 +58,12 @@ in
         source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/git/ignore";
         force = true;
       };
-    }
-    // lib.optionalAttrs manageZshrc {
       ".zshrc" = {
         source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/zsh/.zshrc";
+        force = true;
+      };
+      ".p10k.zsh" = {
+        source = config.lib.file.mkOutOfStoreSymlink "${dotfilesPath}/zsh/.p10k.zsh";
         force = true;
       };
     };
@@ -105,10 +99,8 @@ in
   # そのプロジェクトの flake.nix devShell を自動で有効化/無効化する。
   # nix-direnv は devShell の評価結果をキャッシュして即座に切り替えるための拡張
   # （direnvrc の配線も home-manager が自動生成する）。
-  # zsh へのフックは ~/.zshrc が home-manager 非管理（旧 ~/dotfiles を指す）のため
-  # enableZshIntegration では注入されない。フックは実際に効いている旧
-  # ~/dotfiles/zsh/.zshrc と、切り替え後に備えて本リポジトリの zsh/.zshrc の
-  # 両方に直書きしてある
+  # zsh へのフックは、~/.zshrc を programs.zsh ではなく zsh/.zshrc へのリンクで管理しているため
+  # enableZshIntegration では注入されない。フックは zsh/.zshrc に直書きしてある
   programs.direnv = {
     enable = true;
     nix-direnv.enable = true;

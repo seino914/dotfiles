@@ -27,7 +27,7 @@ cp ~/Dev/seino914/dotfiles/.github/workflows/*.yml .github/workflows/
 
 ## zsh
 
-現在の `~/.zshrc` は旧 `~/dotfiles` 側。このリポジトリの zsh 設定は未適用（切り替えは `zsh/README.md`）。
+`~/.zshrc`・`~/.p10k.zsh` はこのリポジトリの `zsh/` へのリンク（詳細は `zsh/README.md`）。
 
 ```zsh
 source ~/.zshrc
