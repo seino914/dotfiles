@@ -78,6 +78,8 @@
         # プロンプト行の左端に出るマーク（「[」）を表示しない。
         # マーク自体は付くので、⌘↑ / ⌘↓ でプロンプト間を移動する機能は残る
         ShowLineMarks = false;
+        # タブが 1 つのときはタブバーを出さない（「表示 → タブバーを隠す」と同じ。2 つ以上なら出る）
+        "NSWindowTabbingShoudShowTabBarKey-TTWindow-TTWindowController-TTWindowController-VT-FS" = false;
       };
     };
   };
