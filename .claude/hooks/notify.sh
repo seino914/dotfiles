@@ -5,7 +5,7 @@
 # 受信側の PWA は別リポジトリ claude-notify-mobile（Vercel 配信）にある。
 # stdin に hook イベントの JSON が流れてくる。
 # 何が起きても即座に exit 0 で終わる（Claude Code の動作を妨げないため）。
-# Stop はバックグラウンドのサブエージェントが実行中なら送らない（判定は下の「Stop:」の節）。
+# Stop は、verify-gate.sh が続行させたときと、バックグラウンドのサブエージェントが実行中のときは送らない（判定は下の「Stop:」の節）。
 # 送信に使う node は環境変数 CLAUDE_NOTIFY_NODE で差し替えられる（テストは偽の node で送信を止めて検査する）。
 
 set -u
@@ -64,6 +64,28 @@ mkdir -p "$(dirname "$LOG_FILE")" 2>/dev/null
 # ログの無限成長を防ぐ（1MB超なら切り詰めてから追記する）
 if [ -f "$LOG_FILE" ] && [ "$(wc -c < "$LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]; then
   : > "$LOG_FILE"
+fi
+
+# 依存（web-push）が入っていない PC では送らない（送信側が起動で落ちるだけなので、ログに残して終える）
+if [ ! -d "$(dirname "$SENDER")/node_modules/web-push" ]; then
+  echo "[claude-notify] $(dirname "$SENDER")/node_modules/web-push が無いため送信しません（claude-notify で pnpm install が必要）。" >>"$LOG_FILE" 2>/dev/null
+  exit 0
+fi
+
+# Stop: verify-gate.sh が続行させた Stop（検証が未成功でターンを終えさせなかったもの）は完了ではないので送らない。
+# verify-gate.sh の状態ファイル（${TMPDIR:-/tmp}/claude-verify-gate-<session_id>）が空でなく、stop_hook_active が true でないとき
+# （true のときは verify-gate.sh が状態を消して通すので、今までどおり送る）
+if [ "$event" = "Stop" ]; then
+  session="$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)"
+  active="$(printf '%s' "$input" | jq -r '.stop_hook_active // false' 2>/dev/null)"
+  if [[ "$session" =~ ^[A-Za-z0-9._-]+$ ]] && [ "$active" != "true" ]; then
+    gate_state="${TMPDIR:-/tmp}"
+    gate_state="${gate_state%/}/claude-verify-gate-${session}"
+    if [ -s "$gate_state" ]; then
+      echo "[claude-notify] verify-gate が続行させた Stop のため送信しません（${project}）。" >>"$LOG_FILE" 2>/dev/null
+      exit 0
+    fi
+  fi
 fi
 
 # Stop: バックグラウンドのサブエージェントがまだ動いているなら送らない。
