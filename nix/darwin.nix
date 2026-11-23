@@ -1,4 +1,4 @@
-{ username, ... }:
+{ pkgs, username, ... }:
 {
   # Nix本体（デーモン・GC・設定）はDeterminate Systemsインストーラーが管理する。
   # nix-darwin側の管理を有効にすると二重管理で衝突するため必ず false にする
@@ -13,6 +13,11 @@
   # system.defaults などユーザースコープ設定の適用先ユーザー
   system.primaryUser = username;
   users.users.${username}.home = "/Users/${username}";
+
+  # フォント（/Library/Fonts/Nix Fonts に入る）。
+  # JetBrainsMono Nerd Font は Terminal.app のプロファイル（terminal/Dotfiles.terminal）が使う
+  # （JetBrains Mono に Nerd Font のアイコンを足したもの）
+  fonts.packages = [ pkgs.nerd-fonts.jetbrains-mono ];
 
   # ─── macOS設定（現行Macから採取した値） ───
   system.defaults = {
@@ -63,12 +68,30 @@
         speed = "2.7";
         duration = "4.35";
       };
+
+      # Terminal.app：新しいウィンドウと起動時に使うプロファイル。
+      # プロファイルの中身（フォント・色はバイナリなので Nix では書けない）は
+      # postActivation で terminal/Dotfiles.terminal から取り込む
+      "com.apple.Terminal" = {
+        "Default Window Settings" = "Dotfiles";
+        "Startup Window Settings" = "Dotfiles";
+        # プロンプト行の左端に出るマーク（「[」）を表示しない。
+        # マーク自体は付くので、⌘↑ / ⌘↓ でプロンプト間を移動する機能は残る
+        ShowLineMarks = false;
+      };
     };
   };
 
   system.activationScripts.postActivation.text = ''
     # 再ログインせずに defaults の変更を反映させる
     sudo -u ${username} /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
+
+    # ─── Terminal.app のプロファイル（中身はリポジトリの terminal/Dotfiles.terminal が正） ───
+    # switch のたびに上書きするので、UI で変えたら terminal/README.md の手順で書き出し直す。
+    # 反映は Terminal.app の再起動後。失敗しても switch は止めない
+    sudo -u ${username} defaults write com.apple.Terminal "Window Settings" \
+      -dict-add Dotfiles "$(cat ${../terminal/Dotfiles.terminal})" \
+      || echo "warning: Terminal.app のプロファイルを取り込めませんでした" >&2
 
     # ─── ディスプレイの明るさ（system.defaults に項目が無いため直接設定する） ───
     # バッテリー駆動時に少し暗くしない（充電の抜き差しで明るさが変わらないようにする）。
