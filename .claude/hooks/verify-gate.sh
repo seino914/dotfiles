@@ -15,6 +15,7 @@
 #                .claude/skills/** のうち .md 以外と .claude/skills/<名前>/SKILL.md・.claude/agents/<名前>.md
 #                （run.sh が検査するものだけ。skills 配下の参考資料の .md や agents のサブディレクトリは対象外）
 #     nix eval … flake.nix・flake.lock・nix/**/*.nix（nix/README.md 等のドキュメントは対象外）
+#     claude-notify/*.mjs … run.sh（run.sh が node --check で構文を検査する）
 #     両方     … .claude/dev-roots（guard-destructive.sh とテストが読むうえ、nix/home.nix も readFile で読む）
 #   （.claude/worktrees/<名前>/ 内の編集は、その接頭辞を剥がして同じ規則で分類する）
 # - PostToolUse(Bash): 成功した Bash のうち、コマンドに tests/run.sh を含み（cwd が .claude の相対実行も数える） stdout に行全体が「すべて通過」の行が
@@ -67,6 +68,7 @@ classify() {
   [[ "$rel" =~ ^\.claude/worktrees/[^/]+/(.+)$ ]] && rel="${BASH_REMATCH[1]}"
   case "$rel" in
     .claude/dev-roots) printf 'run.sh\nnix eval\n' ;;
+    claude-notify/*.mjs) printf 'run.sh\n' ;;
     .claude/hooks/* | .claude/tests/* | .claude/settings.json | .claude/setup.sh | bootstrap.sh) printf 'run.sh\n' ;;
     .claude/skills/*)
       case "$rel" in
@@ -90,8 +92,8 @@ remove_cat() {
 # Stop 時の説明文（カテゴリごと）
 explain() {
   case "$1" in
-    run.sh) printf -- '- run.sh: dotfiles ルート（%s）で `%s` を実行し、最終行が「すべて通過」になることを確認する。理由: .claude/ は ~/.claude の実体で、編集はコミット前でも全プロジェクトの Claude Code に即反映される。フックの判定の退行や settings.json の破損はこのテストでしか検出できない\n' "${ROOT}" "${CMD_RUNSH}" ;;
-    "nix eval") printf -- '- nix eval: dotfiles ルート（%s）で `%s` を実行し、/nix/store/…drv が出力されることを確認する。理由: flake の評価エラーや git add し忘れた .nix は、ユーザーに sudo darwin-rebuild switch を依頼してから初めて発覚するため、依頼前にここで検出する\n' "${ROOT}" "${CMD_NIX}" ;;
+    run.sh) printf -- '- run.sh: dotfiles ルート（%s）で `%s` を実行し、最終行が「すべて通過」になることを確認する\n' "${ROOT}" "${CMD_RUNSH}" ;;
+    "nix eval") printf -- '- nix eval: dotfiles ルート（%s）で `%s` を実行し、/nix/store/…drv が出力されることを確認する\n' "${ROOT}" "${CMD_NIX}" ;;
   esac
 }
 
@@ -131,9 +133,8 @@ ${pending}"
       jq -cn --arg m "$msg" '{systemMessage: $m}'
       rm -f "$STATE"
     else
-      reason="verify-gate: このセッションで dotfiles の検証対象ファイルを変更しましたが、対応する検証（${names}）がまだ成功していません。ターンを終える前に次を実行してください（| tail 等でパイプしてもよい。出力で成功を判定する）。バックグラウンド実行（run_in_background）では結果が届かず解除されないので、フォアグラウンドで実行する。
-${pending}
-失敗した場合は自分の変更が原因なら直して再実行する。自分の変更と無関係な既存の失敗なら直さずユーザーに報告する。どうしても実行できない場合は、報告に「未検証」と明記してから終える。"
+      reason="verify-gate: dotfiles の検証（${names}）が未成功です。ターンを終える前にフォアグラウンドで次を実行する（パイプ可。run_in_background だと解除されない）。
+${pending}実行できない場合は報告に「未検証」と明記して終える。"
       jq -cn --arg r "$reason" '{decision: "block", reason: $r}'
     fi
     ;;

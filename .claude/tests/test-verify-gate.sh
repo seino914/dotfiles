@@ -11,14 +11,14 @@ cleanup() { rm -rf "$W"; }
 trap cleanup EXIT
 cleanup
 mkdir -p "$W/repo/.claude/hooks/lib" "$W/repo/.claude/tests" "$W/repo/.claude/skills/x/sub" "$W/repo/.claude/agents/sub" \
-  "$W/repo/.claude/worktrees/wt/.claude/hooks" "$W/repo/.claude/worktrees/wt/nix" "$W/repo/.claude/worktrees/wt/docs" "$W/repo/nix" "$W/repo/docs" "$W/outside" "$W/home/.claude" "$W/tmp"
+  "$W/repo/.claude/worktrees/wt/.claude/hooks" "$W/repo/.claude/worktrees/wt/nix" "$W/repo/.claude/worktrees/wt/docs" "$W/repo/nix" "$W/repo/docs" "$W/repo/claude-notify" "$W/outside" "$W/home/.claude" "$W/tmp"
 cp "$HOOK" "$W/repo/.claude/hooks/verify-gate.sh"
 H="$W/repo/.claude/hooks/verify-gate.sh"
 ROOT="$(cd "$W/repo" && pwd -P)"   # macOS の TMPDIR（/var/…）は /private/var/… へのリンクなので実体で比べる
 ST="$W/tmp"
 for f in .claude/hooks/x.sh .claude/hooks/lib/strip-shell.awk .claude/tests/test-x.sh .claude/settings.json .claude/dev-roots \
   .claude/setup.sh .claude/skills/x/SKILL.md .claude/skills/x/ref.md .claude/skills/x/sub/SKILL.md .claude/skills/x/tool.sh \
-  .claude/agents/a.md .claude/agents/sub/b.md .claude/README.md bootstrap.sh flake.nix flake.lock nix/home.nix nix/README.md README.md CLAUDE.md docs/x.md \
+  .claude/agents/a.md .claude/agents/sub/b.md .claude/README.md bootstrap.sh flake.nix flake.lock nix/home.nix nix/README.md README.md CLAUDE.md docs/x.md claude-notify/send-push.mjs claude-notify/package.json \
   .claude/worktrees/wt/.claude/hooks/x.sh .claude/worktrees/wt/nix/home.nix .claude/worktrees/wt/docs/x.md; do
   : > "$W/repo/$f"
 done
@@ -62,7 +62,9 @@ reason=$(jget "$out" '.reason // ""')
 report A05-reason-cmd yes "$(has "$reason" 'bash .claude/tests/run.sh')" "$reason"
 report A06-reason-root yes "$(has "$reason" "（${ROOT}）")" "$reason"   # 変数直後の全角括弧が壊れていない
 report A07-reason-no-nix no "$(has "$reason" 'nix eval --raw')" "$reason"
-report A08-reason-foreground yes "$(has "$reason" 'フォアグラウンドで実行する')" "$reason"
+report A08-reason-foreground yes "$(has "$reason" 'フォアグラウンドで次を実行する')" "$reason"
+report A08b-reason-unverified yes "$(has "$reason" '「未検証」と明記')" "$reason"
+report A08c-reason-short no "$(has "$reason" '理由:')" "$reason"
 report A09-state-kept run.sh "$(state_of "$S1")" "続行させる Stop では記録を消さない"
 report A10-no-sysmsg none "$(jget "$out" '.systemMessage // "none"')" "$out"
 bashrun "$S1" 'bash .claude/tests/run.sh' 'ok' >/dev/null
@@ -141,6 +143,8 @@ run.sh $W/repo/.claude/skills/x/SKILL.md
 run.sh $W/repo/.claude/skills/x/tool.sh
 run.sh $W/repo/.claude/agents/a.md
 run.sh $W/repo/bootstrap.sh
+run.sh $W/repo/claude-notify/send-push.mjs
+none $W/repo/claude-notify/package.json
 run.sh $W/repo/.claude/hooks/new-not-yet.sh
 run.sh $W/home/.claude/hooks/x.sh
 nix_eval $W/repo/flake.nix
