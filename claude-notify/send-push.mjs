@@ -150,13 +150,17 @@ function saveState(statePath, state) {
   }
 }
 
-/** デバウンス判定。送信すべきなら true を返す */
-function shouldSendByDebounce(statePath, event, debounceSeconds, now = new Date()) {
+function debounceKey(event, project) {
+  return `${event}:${project ?? ""}`;
+}
+
+/** デバウンス判定。送信すべきなら true を返す（キーはイベント名＋プロジェクト名。古い形式のキーは無視される） */
+function shouldSendByDebounce(statePath, event, project, debounceSeconds, now = new Date()) {
   if (!debounceSeconds || debounceSeconds <= 0) return true;
   if (!event) return true;
 
   const state = loadState(statePath);
-  const lastSentAt = state[event];
+  const lastSentAt = state[debounceKey(event, project)];
   if (typeof lastSentAt === "number") {
     const elapsedSeconds = (now.getTime() - lastSentAt) / 1000;
     if (elapsedSeconds < debounceSeconds) {
@@ -167,10 +171,10 @@ function shouldSendByDebounce(statePath, event, debounceSeconds, now = new Date(
 }
 
 /** デバウンス用に最終送信時刻を記録する */
-function recordSendTime(statePath, event, now = new Date()) {
+function recordSendTime(statePath, event, project, now = new Date()) {
   if (!event) return;
   const state = loadState(statePath);
-  state[event] = now.getTime();
+  state[debounceKey(event, project)] = now.getTime();
   saveState(statePath, state);
 }
 
@@ -190,7 +194,8 @@ async function main() {
   const body = typeof args.body === "string" ? args.body : "";
   const event = typeof args.event === "string" ? args.event : undefined;
   const project = typeof args.project === "string" ? args.project : undefined;
-  const tag = typeof args.tag === "string" ? args.tag : event;
+  // tag が同じ通知は受信側で置き換わるので、既定はデバウンスと同じくイベント＋プロジェクト単位にする
+  const tag = typeof args.tag === "string" ? args.tag : event ? debounceKey(event, project) : undefined;
 
   const configPath = resolveConfigPath();
   const config = loadConfig(configPath);
@@ -220,9 +225,9 @@ async function main() {
 
   // debounce フィルタ
   const statePath = resolveStatePath(configPath);
-  if (!shouldSendByDebounce(statePath, event, filters.debounceSeconds)) {
+  if (!shouldSendByDebounce(statePath, event, project, filters.debounceSeconds)) {
     process.stderr.write(
-      `[claude-notify] デバウンス期間内（${filters.debounceSeconds}秒）のため送信しません（event=${event}）。\n`
+      `[claude-notify] デバウンス期間内（${filters.debounceSeconds}秒）のため送信しません（event=${event}, project=${project ?? ""}）。\n`
     );
     return;
   }
@@ -243,7 +248,7 @@ async function main() {
   });
 
   // デバウンスの記録は送信を試みた時点で行う（失敗時の連投も抑制するため）
-  recordSendTime(statePath, event);
+  recordSendTime(statePath, event, project);
 
   try {
     await withTimeout(

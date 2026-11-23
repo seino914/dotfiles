@@ -2,7 +2,7 @@
 # .claude/ 配下の検証をまとめて実行する（sudo 不要・1分ほどで終わる）
 #   bash .claude/tests/run.sh
 # 内容: settings.json の JSON 構文、シェルスクリプトの構文、hooks/lib/*.awk の構文、
-#       SKILL.md / agents の frontmatter、フックのテーブル駆動テスト
+#       .mjs の構文（node --check）、dev-roots の値の写しの同期検査、SKILL.md / agents の frontmatter、フックのテーブル駆動テスト
 #       （pr-mode / guard-destructive / validate-claude-config / verify-gate / notify の5本。各テストの summary 行も検査する）、
 #       /git-pull スキルの pull.sh の挙動テスト（test-git-pull.sh。使い捨ての bare リポジトリで動かす）、
 #       settings.json のフック・statusLine の登録元検査
@@ -25,6 +25,29 @@ for f in "$HOOKS_DIR"/*.sh "$CLAUDE_DIR/setup.sh" "$TESTS_DIR"/*.sh "$REPO_DIR/b
     *) if bash -n "$f" 2>/dev/null; then echo "  ✓ $(basename "$f")"; else echo "  ✗ $f: 構文エラー"; bash -n "$f"; status=1; fi ;;
   esac
 done
+# .mjs（claude-notify の送信スクリプトと skills 配下のスクリプト）は node --check で構文を見る
+if command -v node >/dev/null 2>&1; then
+  for f in "$CLAUDE_DIR"/skills/*/*.mjs "$REPO_DIR"/claude-notify/*.mjs; do
+    [ -f "$f" ] || continue
+    if node --check "$f" 2>/dev/null; then echo "  ✓ $(basename "$f")"; else echo "  ✗ $f: 構文エラー"; node --check "$f"; status=1; fi
+  done
+else
+  echo "  - node が無いため .mjs の構文検査を省略"
+fi
+# dev-roots の値の写し（.claude/CLAUDE.md と settings.json の autoMode.environment）が実際の有効行と同期しているか見る。
+# 有効行の読み方は guard-destructive.sh と同じ（# 以降・前後の空白・末尾の / を除き、~/ 始まりの行だけ）
+am_env=$(jq -r '.autoMode.environment // [] | join("\n")' "$CLAUDE_DIR/settings.json" 2>/dev/null)
+claude_md=$(cat "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null)
+sync_ng=0
+if [ -f "$CLAUDE_DIR/dev-roots" ]; then
+  while IFS= read -r line; do
+    line=${line%%#*}; line=${line#"${line%%[![:space:]]*}"}; line=${line%"${line##*[![:space:]]}"}; line=${line%/}
+    case "$line" in '~/'?*) ;; *) continue ;; esac
+    case "$claude_md" in *"$line"*) ;; *) echo "  ✗ dev-roots の $line が .claude/CLAUDE.md に無い（値の写しを直す）"; sync_ng=1 ;; esac
+    case "$am_env" in *"$line"*) ;; *) echo "  ✗ dev-roots の $line が settings.json の autoMode.environment に無い（値の写しを直す）"; sync_ng=1 ;; esac
+  done < "$CLAUDE_DIR/dev-roots"
+fi
+if [ "$sync_ng" -eq 0 ]; then echo "  ✓ dev-roots の値の写し（CLAUDE.md・autoMode.environment）が同期"; else status=1; fi
 # frontmatter は validate-claude-config.sh と同じ条件で見る（1 行目の --- ／ 閉じ --- ／ name: ／ description:）
 for f in "$CLAUDE_DIR"/skills/*/SKILL.md "$CLAUDE_DIR"/agents/*.md; do
   [ -f "$f" ] || continue

@@ -10,11 +10,11 @@ Nix（nix-darwin + home-manager + nix-homebrew）でmacOS環境全体を宣言�
 | ファイル | 役割 |
 | :--- | :--- |
 | [`../bootstrap.sh`](../bootstrap.sh) | 新しいMacの1コマンドセットアップ。`~/Dev/seino914` の作成・クローン・ユーザー名の自動書き換え・初回適用までを行う |
-| [`../flake.nix`](../flake.nix) | エントリポイント。nix-darwin / home-manager / nix-homebrew を統合し、機種に依存しない構成名 `mac` を定義。ユーザー名（`username`）はbootstrap.shがそのMacに合わせて自動で書き換える |
+| [`../flake.nix`](../flake.nix) | エントリポイント。nix-darwin / home-manager / nix-homebrew を統合し、機種に依存しない構成名 `mac` を定義。ユーザー名（`username`）はbootstrap.shがそのMacに合わせて自動で書き換える。一時対応として、`inputs.nixpkgs-node` の固定版で `nodejs_26`・`pnpm_11` を差し替える overlay を持つ（nixpkgs に Node 26.12.1 以降が届くと警告が出るので、`nixpkgs-node` と overlay を削除する） |
 | [`darwin.nix`](darwin.nix) | macOSのシステム設定。`system.defaults`（キーリピート・マウス感度・Dock・トラックパッド）と、`CustomUserPreferences` によるアプリ固有設定（Mosのスクロール反転等）、フォント（`fonts.packages`）、activation でのディスプレイ明るさ設定（自動調節オフ・バッテリー時に暗くしない）と Terminal.app のプロファイル取り込み |
 | [`packages.nix`](packages.nix) | CLIツール群（git・gh・Node.js・pnpm・Docker CLI等）。バージョンは `flake.lock` で固定される |
 | [`homebrew.nix`](homebrew.nix) | GUIアプリの宣言リスト。Homebrew cask（Chrome・VSCode・Devin Desktop・Mos等）と App Storeアプリ（`masApps`: LINE・Kindle）。Homebrew本体はnix-homebrewが導入するため手動インストール不要 |
-| [`home.nix`](home.nix) | home-manager設定。VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、direnv + nix-direnvの導入（`.envrc` のあるディレクトリでdevShellを自動ON/OFF）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行）、claude-notify の依存導入（`../claude-notify` で `pnpm install --frozen-lockfile`。失敗しても switch は止めない）、作業ディレクトリの作成（`devDirs` は [`../.claude/dev-roots`](../.claude/dev-roots) を `builtins.readFile` + `builtins.match` で読んで導出する。読み方は guard-destructive.sh・テストと同じで、`#` 以降・前後の空白・末尾の `/` を無視し `~/` 始まりの行だけ採る） |
+| [`home.nix`](home.nix) | home-manager設定。VSCode/Cursor 設定（`../vscode/` の settings.json・keybindings.json）の書き込み可能リンク、拡張機能の自動インストール（`../vscode/install-extensions.sh`）、direnv + nix-direnvの導入（`.envrc` のあるディレクトリでdevShellを自動ON/OFF）、`.claude/` 配下のリンク処理（既存 `setup.sh` をactivation時に自動実行）、claude-notify の依存導入（`../claude-notify` で `pnpm install --frozen-lockfile`。失敗しても switch は止めない）、作業ディレクトリの作成（`devDirs` は [`../.claude/dev-roots`](../.claude/dev-roots) を `builtins.readFile` + `builtins.match` で読んで導出する。読み方は [`../.claude/dev-roots`](../.claude/dev-roots) 冒頭のコメント） |
 
 ## 新しいMacのセットアップ手順
 

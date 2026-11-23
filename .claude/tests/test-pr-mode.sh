@@ -213,6 +213,15 @@ printf 'region = us\n' >"$REPO_SEC/aws.cfg"; git -C "$REPO_SEC" add aws.cfg
 pr S15-removed-line-passes allow "$S_ON" 'git commit -m x' "$REPO_SEC"
 out=$(bash "$SCAN" /nonexistent 2>&1); rc=$?; report S16-missing-dir "0:" "$rc:$out" ""
 out=$(bash "$SCAN" "" 2>&1); rc=$?; report S17-empty-arg "0:" "$rc:$out" ""
+# VAPID 秘密鍵（43 文字の base64url）。プレースホルダは当たらない
+VAPID_KEY="$(printf 'A%.0s' $(seq 1 43))"
+printf '{"vapid": {"privateKey": "%s"}}\n' "$VAPID_KEY" >"$REPO_SEC/notify.json"
+git -C "$REPO_SEC" add notify.json
+pre S18-vapid-private-key ask "$S_ON" 'git commit -m x' "$REPO_SEC"
+reason S18-reason "$S_ON" 'git commit -m x' 'notify.json（VAPID 秘密鍵）' "$REPO_SEC"
+printf '{"vapid": {"privateKey": "YOUR_VAPID_PRIVATE_KEY"}}\n' >"$REPO_SEC/notify.json"
+git -C "$REPO_SEC" add notify.json
+pr S19-vapid-placeholder-passes allow "$S_ON" 'git commit -m x' "$REPO_SEC"
 
 echo "# L. サブエージェント（入力に agent_id がある）からの対象コマンドは /pr 中でも deny"
 agent_case() { # label expected event session cmd

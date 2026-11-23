@@ -2,13 +2,9 @@
 
 ## リポジトリの性質
 
-macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/tests/run.sh`（フックのテーブル駆動テスト・/git-pull の挙動テスト・settings.json のフック登録元検査）だけがある（変更後の検証手段は後述）。管理対象：
+macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/tests/run.sh` だけがある（内容は `.claude/README.md` の「検証（テスト）」、使い方は後述）。構成は `README.md` のディレクトリ構成を参照。Claude の作業に効く注意：
 
-- `flake.nix` + `nix/` — nix-darwin + home-manager + nix-homebrew によるmacOS環境全体の宣言管理。`bootstrap.sh` が新Macの1コマンドセットアップ
-- `vscode/`・`zsh/`・`git/ignore` — VSCode / Cursor・zsh・git 全体 ignore の設定の実体。書き込み可能リンクで配る（詳細は `vscode/README.md`・`zsh/README.md`）
-- `.claude/` — Claude Codeの**グローバル設定の実体**（一覧は `.claude/README.md`）
-- `terminal/` — Terminal.app のプロファイル（`darwin.nix` が switch のたびに取り込む）
-- `claude-notify/` — iPhoneへのWeb Push通知の送信側スクリプト。`notify.sh` が `Stop` / `Notification` から呼び、**何が起きても即 exit 0**（Claude Code を止めない）。設計・セットアップは `.claude/README.md`
+- `claude-notify/` — `notify.sh` が `Stop` / `Notification` から呼ぶ送信スクリプト。**何が起きても即 exit 0**（Claude Code を止めない）。設計・セットアップは `.claude/README.md`
 - `.github/workflows/` — 他リポジトリへコピーして使う配布用テンプレート。ただし `delete-merged-branch.yml` は**このリポジトリ自身のPRにも発火する**
 - `commands/` — 個人用の早見表メモ。`.claude/commands/`（カスタムスラッシュコマンド）ではない
 
@@ -18,7 +14,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 
 ## 脅威モデル（レビューの前提）
 
-`.claude/hooks/`・`.claude/skills/`・`bootstrap.sh` 等は、操作者がユーザーと Claude だけの**事故防止の部品**。普通の使い方で起きる事故だけを見て、難読化・敵対的な回避は対象外（グローバル CLAUDE.md の「レビューの範囲」）。複雑さ自体がリスクなので、フックの抜け道を指摘されても判定は足さず、解釈できない形は通す。例外は `claude-notify/` と `~/.claude/claude-notify.json`（VAPID 秘密鍵と購読情報を扱い、外部の Push サービスへ送信する）で、秘密情報の扱いとしてセキュリティの前提で見る。
+`.claude/hooks/`・skills・`bootstrap.sh` 等は**事故防止の部品**（グローバル CLAUDE.md の「レビューの範囲」）。複雑さ自体がリスクなので、フックの抜け道を指摘されても判定は足さず、解釈できない形は通す。例外は `claude-notify/` と `~/.claude/claude-notify.json`（VAPID 秘密鍵と購読情報を扱い、外部の Push サービスへ送信する）で、秘密情報の扱いとしてセキュリティの前提で見る。
 
 ### 合格の線（ユーザーの決定。細かい指摘の継ぎ足しで PR のレビューが終わらなくなったため）
 
@@ -38,26 +34,22 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 
 ## やってはいけないこと（理由つき）
 
-- `darwin.nix` の `nix.enable = false` を変える — Nix本体はDeterminate Systemsインストーラーが管理しており、二重管理で衝突する
-- `home.nix` の `.claude/` 処理をhome-manager標準管理へ移行する — `setup.sh` のセルフヒーリング（claude-code Issue #40857 対策。仕組みは `.claude/README.md`）はhome-managerで再現できない
-- `home.nix` の `editorUserFiles` から `force = true` を外す — 初回適用時に既存実体をリンクへ置き換えるのに必要
-- `flake.nix` の `username` ハードコードを動的取得にする — flakeは純粋評価で環境変数を読めない。`bootstrap.sh` がクローン時に `sed` で書き換える設計
-- direnvのzshフックを `programs.direnv.enableZshIntegration` に置き換える — `~/.zshrc` は `programs.zsh` ではなく `zsh/.zshrc` へのリンクで管理しているため注入されない。フックは `.zshrc` に直書きする
-- `claude-code`・Codex・Cursor・Devin の各CLIをNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
-- `settings.json` の `pr-mode.sh`・`guard-destructive.sh` の `onFailure: "block"` を外す — 外すと、安全装置のフックが壊れたとき（起動不能・タイムアウト・想定外の exit コード）に黙って素通りになる。代償として、フックのファイルが消える・壊れると全 Bash が止まるが、復旧は `claude --safe-mode`（`.claude/README.md` の「緊急時の復旧」）で行う
+- `darwin.nix` の `nix.enable = false` を変える — Nix 本体は別インストーラーの管理で二重管理になる
+- `home.nix` の `.claude/` 処理を home-manager 標準管理へ移行する — `setup.sh` のセルフヒーリングを再現できない（仕組みは `.claude/README.md`）
+- `home.nix` の `editorUserFiles` から `force = true` を外す — 初回適用で既存実体を置き換えられなくなる
+- `flake.nix` の `username` ハードコードを動的取得にする — flake は純粋評価で環境変数を読めない（`bootstrap.sh` が sed で書き換える）
+- direnv の zsh フックを `programs.direnv.enableZshIntegration` に置き換える — `~/.zshrc` はリンク管理で注入されない（`zsh/.zshrc` に直書き）
+- `claude-code`・Codex・Cursor・Devin の各 CLI を Nix 管理に入れる — 自動更新版の公式インストーラーを採用（`packages.nix` のコメント）
+- `settings.json` の `pr-mode.sh`・`guard-destructive.sh` の `onFailure: "block"` を外す — 外すとフックが壊れたときに黙って素通りになる（代償と復旧は `.claude/README.md` の「緊急時の復旧」）
 
 ## 編集時に知っておくこと
 
 - 構成名は機種非依存の `mac` 固定。適用は常に `--flake <リポジトリ>#mac` と明示する（ホスト名フォールバックは意図的に不使用）
 - **flakeはgit追跡ファイルしか認識しない**。`.nix` を追加したら `git add` する（ステージングで足りる）。例外は `vscode/` 配下（`mkOutOfStoreSymlink` の絶対パス参照なので評価時に読まれない）。ただし新Macへ配るにはpushが必要
-- `homebrew.nix` は `cleanup = "none"`。caskを削除しても既存Macからは消えない（`vscode/extensions.txt` の拡張機能も同方針）
-- アプリ固有設定の宣言化は `defaults read <ドメイン>` で実機から採取し、`darwin.nix` の `CustomUserPreferences` へ書く（Mosの例を参照）
-- `.claude/` 配下にファイルを追加・削除したら `bash .claude/setup.sh` を再実行する（冪等。`darwin-rebuild switch` 時にも自動実行。ワークツリーの中からは実行しない）。VSCode/Cursor設定はUIから変更すれば即リポジトリに反映され、拡張機能の追加導入のみ `switch` が要る
-- `setup.sh` はgitが管理するファイル（追跡済み＋未追跡かつ`.gitignore`対象外）だけを配布する。`.claude/tests/` はリンク対象外（`~/.claude` には配られない）
-- **削除の許可ルートの定義は `.claude/dev-roots` だけ**（`guard-destructive.sh` や `nix/home.nix` に直書きしない。文法と読む側は `.claude/README.md`）。値の写しが `.claude/CLAUDE.md` の「ファイル削除」節と `settings.json` の `autoMode.environment` にもあるので一緒に直す。変更したら **`git add .claude/dev-roots`**（flakeはgit追跡ファイルしか読まない）と **`nix eval`**、`bash .claude/tests/run.sh`、`bash .claude/setup.sh` を通す
+- `.claude/` 配下にファイルを追加・削除したら `bash .claude/setup.sh` を再実行する（冪等。`darwin-rebuild switch` 時にも自動実行。ワークツリーの中からは実行しない。配るのは git が管理するファイルだけで `tests/` は配らない）。VSCode/Cursor設定はUIから変更すれば即リポジトリに反映され、拡張機能の追加導入のみ `switch` が要る
+- **削除の許可ルートの定義は `.claude/dev-roots` だけ**（`guard-destructive.sh` や `nix/home.nix` に直書きしない。文法と読む側は `dev-roots` 冒頭のコメント）。値の写しが `.claude/CLAUDE.md` の「ファイル削除」節と `settings.json` の `autoMode.environment` にもあるので一緒に直す（写しの不足は run.sh が検出する）。変更したら **`git add .claude/dev-roots`**（flakeはgit追跡ファイルしか読まない）と **`nix eval`**、`bash .claude/tests/run.sh`、`bash .claude/setup.sh` を通す
 - `.claude/settings.json` の Orca 由来のフック・`statusLine`（コマンドに `orca` を含むもの）は外部アプリ Orca が書き込むもので、手で編集しない（詳細は `.claude/README.md`）。ファイルの 8 割がそのコマンドなので、読むときは `jq '.permissions'` 等で絞るか Read に offset / limit を付ける
-- 新しいモデルが出たら `modelSettings` にそのモデルの `effortLevel` を足す（v2.1.251 以降 `/effort` はモデル別に保存され、Opus 5.5 以降はトップレベルの `effortLevel` を無視して medium で動くため）。`model` が `opus` エイリアスなので、解決先が変わったときも同様
-- 適用・更新・配布のコマンドは `README.md` の「コマンド」参照
+- 新しいモデルが出たとき・`opus` エイリアスの解決先が変わったときは、`modelSettings` にそのモデルの `effortLevel` を足す（無いと medium で動く。経緯は `.claude/README.md` の settings.json 節）
 
 ## 変更後の検証（Claude Codeが自分で実行する。sudo不要）
 
@@ -66,9 +58,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 ```zsh
 # flake.nix / nix/ を変更したとき（評価エラー・未 git add を検出。初回は数十秒。options.json の warning は上流由来で無視してよい）
 nix eval --raw .#darwinConfigurations.mac.system.drvPath
-# .claude/ 配下（settings.json・hooks/（lib/ を含む）・skills/・dev-roots・setup.sh）や bootstrap.sh を変更したとき
-# （JSON・シェル構文・awk 構文・SKILL.md frontmatter・settings.json のフック登録元のチェック＋フックのテーブル駆動テスト一式を1分ほどで実行。
-#   フックの正規表現の判定は際どいケースが多く、退行はこれでしか検出できない）
+# .claude/ 配下や bootstrap.sh を変更したとき（対象の正は verify-gate の分類。`.claude/README.md` の「検証ゲート」）
 bash .claude/tests/run.sh
 # run.sh が使えない場合の個別実行: jq empty .claude/settings.json / bash -n <スクリプト>
 ```
@@ -77,4 +67,4 @@ bash .claude/tests/run.sh
 
 ## /pr フローの四層構造
 
-git commit / push / PR作成・更新の制御は、`skills/pr/SKILL.md` の `disable-model-invocation`・`.claude/CLAUDE.md` の指示・`settings.json` の `permissions.ask`・`hooks/pr-mode.sh` の四層で成り立つ。**一層だけ変えると整合が壊れる**ので、対象コマンドを足すときは四層すべてに足す。pr-mode.sh は `/pr` の展開本文を SKILL.md の最初の `# ` 見出しで見分けるので、**H1 を消さない**（改名は可）。各層の役割・判定の一覧・実装上の制約は `.claude/README.md` の「Git操作の制限」と `pr-mode.sh` 冒頭コメントにあるので、変更前に読む。
+git commit / push / PR作成・更新の制御は四層（スキル・指示・`permissions.ask`・`hooks/pr-mode.sh`）で成り立つ。**一層だけ変えると整合が壊れる**ので、対象コマンドを足すときは四層すべてに足す（例外は `.claude/README.md` 参照）。pr-mode.sh は `/pr` の展開本文を SKILL.md の最初の `# ` 見出しで見分けるので、**H1 を消さない**（改名は可）。各層の役割・判定の一覧・実装上の制約は `.claude/README.md` の「Git操作の制限」と `pr-mode.sh` 冒頭コメントにあるので、変更前に読む。

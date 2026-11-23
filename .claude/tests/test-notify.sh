@@ -5,12 +5,15 @@
 # HOME を一時ディレクトリに向け、ログ（~/.claude/claude-notify.log）も隔離する
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
-HOOK="$HOOKS_DIR/notify.sh"
 W="$T/claude-notify-test.$$"
 cleanup() { rm -rf "$W"; }
 trap cleanup EXIT
 cleanup
-mkdir -p "$W/home/.claude" "$W/proj"
+mkdir -p "$W/home/.claude" "$W/proj" "$W/tmp" "$W/repo/.claude/hooks" "$W/repo/claude-notify/node_modules/web-push"
+# notify.sh は自分の実体から dotfiles ルートを求めるので、模擬 dotfiles（送信スクリプトと web-push の有無を制御できる）にコピーして試す
+cp "$HOOKS_DIR/notify.sh" "$W/repo/.claude/hooks/notify.sh"
+: >"$W/repo/claude-notify/send-push.mjs"
+HOOK="$W/repo/.claude/hooks/notify.sh"
 SENT="$W/sent"
 cat >"$W/fake-node" <<EOF
 #!/bin/bash
@@ -28,13 +31,13 @@ sent_or_not() {
   echo none
 }
 
-# case ラベル 期待(sent/none) イベント セッション名
+# case ラベル 期待(sent/none) イベント セッション名 [session_id] [stop_hook_active]
 run_case() {
   local label="$1" expect="$2" event="$3" sess="$4" input
   rm -f "$SENT"
-  input=$(jq -cn --arg e "$event" --arg t "$W/proj/$sess.jsonl" --arg d "$W/proj" \
-    '{hook_event_name:$e, session_id:"s", cwd:$d, transcript_path:$t}')
-  printf '%s' "$input" | HOME="$W/home" CLAUDE_NOTIFY_NODE="$W/fake-node" bash "$HOOK" >/dev/null 2>&1
+  input=$(jq -cn --arg e "$event" --arg t "$W/proj/$sess.jsonl" --arg d "$W/proj" --arg s "${5:-s}" --argjson a "${6:-false}" \
+    '{hook_event_name:$e, session_id:$s, cwd:$d, transcript_path:$t, stop_hook_active:$a}')
+  printf '%s' "$input" | TMPDIR="$W/tmp" HOME="$W/home" CLAUDE_NOTIFY_NODE="$W/fake-node" bash "$HOOK" >/dev/null 2>&1
   report "$label" "$expect" "$(sent_or_not)" "$input"
 }
 
@@ -80,6 +83,23 @@ agent broken agent-g1 'not json'
 run_case N8-broken-meta sent Stop broken
 
 run_case N9-notification-while-running sent Notification running
+
+# verify-gate が続行させた Stop（状態ファイルが空でなく stop_hook_active が true でない）は送らない
+printf 'run.sh\n' >"$W/tmp/claude-verify-gate-gated"
+run_case N11-verify-gate-pending none Stop none gated false
+grep -q 'verify-gate が続行させた Stop' "$W/home/.claude/claude-notify.log" 2>/dev/null && r=logged || r=missing
+report N11-log logged "$r" ""
+run_case N12-verify-gate-active-true sent Stop none gated true
+run_case N13-verify-gate-other-session sent Stop none other false
+: >"$W/tmp/claude-verify-gate-empty"
+run_case N14-verify-gate-empty-state sent Stop none empty false
+run_case N15-notification-ignores-gate sent Notification none gated false
+
+# web-push が無い PC（node_modules 未導入）では送らない
+rmdir "$W/repo/claude-notify/node_modules/web-push"
+run_case N16-no-web-push none Stop none
+grep -q 'web-push が無いため送信しません' "$W/home/.claude/claude-notify.log" 2>/dev/null && r=logged || r=missing
+report N16-log logged "$r" ""
 
 cleanup
 summary "notify.sh"

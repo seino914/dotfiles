@@ -17,18 +17,18 @@
 | `hooks/validate-claude-config.sh` | 設定ファイル編集直後にJSON・シェル構文・frontmatterを検証するフック |
 | `hooks/lib/strip-shell.awk` | シェルコマンド文字列から引用符の中身とHEREDOC本文・行末コメントを除去する共通ライブラリ（pr-mode.sh・guard-destructive.shが利用） |
 | `hooks/lib/scan-secrets.sh` | コミット差分の追加行から既知のトークン形式を探す（pr-mode.sh が `git commit` の自動承認前に呼ぶ） |
-| `dev-roots` | Claude Code が確認なしで削除できる作業ルートの**唯一の定義**（1行1パス、`~/` 始まり、`#` から行末はコメント。`~/` 始まり以外の行は読まれない）。`guard-destructive.sh`・`nix/home.nix`（`devDirs`）・テストが同じ読み方で読む。変更したら `git add` すること（flakeはgit追跡ファイルしか読まない） |
+| `dev-roots` | Claude Code が確認なしで削除できる作業ルートの**唯一の定義**（読み方は `dev-roots` 冒頭のコメント）。`guard-destructive.sh`・`nix/home.nix`（`devDirs`）・テスト・`run.sh`（写しの同期検査）が同じ読み方で読む。変更したら `git add` すること（flakeはgit追跡ファイルしか読まない） |
 | `agents/Explore.md` | 組み込みの Explore サブエージェントを同名のユーザー定義で上書きし、`model: haiku` に固定する（組み込みはメインのモデルを継承するため）。読み取り専用。呼び出し時に `model` を渡せばそちらが優先される |
-| `skills/readme/SKILL.md` | `/readme` スキル：READMEの更新・新規作成。`model: sonnet` |
+| `skills/readme/SKILL.md` | `/readme` スキル：READMEの更新・新規作成。`model: sonnet`、`context: fork` で動く |
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/merge-worktree/SKILL.md` | `/merge-worktree` スキル：自分が起動したサブエージェントのワークツリーを、完了後に未コミットで元の作業ツリーへ取り込んで削除する。モデルから呼べる |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
-| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミットと作業ツリーの画面をヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる HTML を一時領域に作る。`disable-model-invocation: true` |
+| `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミットと作業ツリーの画面をヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる HTML を一時領域に作る。`model: sonnet`、`disable-model-invocation: true` |
 | `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot・ブランチ自動削除を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
-| `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh・notify.sh（5 本）のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
+| `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh・notify.sh（この 5 本が「フック 5 本」）のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
 
 ## セットアップ（反映方法）
 
@@ -79,7 +79,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 
 ## Git操作の制限（/pr フロー）
 
-ユーザーが `/pr` と指示したターンの間だけ、Claude は `git commit` / `git push` / `gh pr create`（別名 `new`）/ `gh pr edit` を実行できる。`/pr` 外は拒否し、`/pr` 中も自動承認の条件を満たさないものは確認ダイアログ（ask）にする。四層すべてに同じ対象コマンドの集合を書く：
+ユーザーが `/pr` と指示したターンの間だけ、Claude は `git commit` / `git push` / `gh pr create`（別名 `new`）/ `gh pr edit` を実行できる。`/pr` 外は拒否し、`/pr` 中も自動承認の条件を満たさないものは確認ダイアログ（ask）にする。四層すべてに同じ対象コマンドの集合を書く（ただし `gh api` の `/pulls` への書き込みは `permissions.ask` で表せないので、フックと `CLAUDE.md` だけが扱う）：
 
 - `skills/pr/SKILL.md` の `disable-model-invocation: true`：`/pr` をユーザー起動限定にする
 - `CLAUDE.md`：`/pr` の指示があるまで対象コマンドを実行しないよう指示する
@@ -129,7 +129,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 `permissions.deny` は秘密ファイルを「読ませない」だけで、トークンがコミットされて漏れる経路は塞げない。**契約**：`/pr` 中の `git commit` を自動承認する直前に、`hooks/lib/scan-secrets.sh` がコミットされる差分の追加行を検査し、既知のトークン形式が見つかれば自動承認せず ask にする（理由にファイル名と形式名を出し、値は出さない）。
 
 - 検査対象：`git commit -a` / `--all` 付きなら `git diff HEAD`、無ければ `git diff --cached`（ステージ済み）の追加行
-- 形式：秘密鍵ブロック（`-----BEGIN … PRIVATE KEY-----` の次の行が base64 の 40 文字以上）、GitHub（`gh?_` / `github_pat_`）、Anthropic（`sk-ant-`）、OpenAI（`sk-proj-`）、AWS アクセスキー ID（`AKIA` / `ASIA`）、Slack（`xox?-`）、Google API キー（`AIza`）、Stripe 本番（`sk_live_`）、npm（`npm_`）
+- 形式：秘密鍵ブロック（`-----BEGIN … PRIVATE KEY-----` の次の行が base64 の 40 文字以上）、VAPID 秘密鍵（`"privateKey": "<43 文字>"`）、GitHub（`gh?_` / `github_pat_`）、Anthropic（`sk-ant-`）、OpenAI（`sk-proj-`）、AWS アクセスキー ID（`AKIA` / `ASIA`）、Slack（`xox?-`）、Google API キー（`AIza`）、Stripe 本番（`sk_live_`）、npm（`npm_`）
 - `EXAMPLE` / `example` / `dummy` / `your_` / `xxxx` / `placeholder` を含む行は除く。git が無い・差分が空なら何も出さない（常に exit 0）
 - ユーザーが `/pr` 外でコミットする場合や、行をまたぐトークン・上記以外の形式は対象外。GitHub の secret scanning と併用する
 
@@ -140,13 +140,13 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 1 本のスクリプトを `hook_event_name` / `tool_name` で分岐する：
 
 - `PostToolUse`(Edit|Write|NotebookEdit)：編集先が dotfiles ルート内なら分類し、状態ファイルにカテゴリを記録する
-  - `run.sh`：`.claude/hooks/**`・`tests/**`・`settings.json`・`setup.sh`・`bootstrap.sh`、`skills/**` の `.md` 以外と各 `SKILL.md`、`agents/<名前>.md`
+  - `run.sh`：`.claude/hooks/**`・`tests/**`・`settings.json`・`setup.sh`・`bootstrap.sh`・`claude-notify/*.mjs`、`skills/**` の `.md` 以外と各 `SKILL.md`、`agents/<名前>.md`
   - `nix eval`：`flake.nix`・`flake.lock`・`nix/**/*.nix`。`.claude/dev-roots` は両方
   - README・`CLAUDE.md`・docs などは対象外
 - `PostToolUse`(Bash)：成功した Bash のうち、コマンドに `.claude/tests/run.sh` を含み出力に「すべて通過」だけの行があれば `run.sh` を、コマンドに `darwinConfigurations.mac.system.drvPath` を含み出力に `/nix/store/…drv` の行があれば `nix eval` を記録から消す。`HOOKS_DIR=` を付けた実行は別の場所のフックを検査しているので数えない
 - `Stop`：記録が残っていれば、`stop_hook_active` が false なら `decision: block` で実行すべきコマンドを返して 1 回だけ続行させる。true なら `systemMessage` で未検証のまま終了した旨を警告し、記録を消す（次に対象を編集するまで促さない）
 
-状態は `${TMPDIR:-/tmp}/claude-verify-gate-<session_id>` に 1 行 1 カテゴリで持つ。どのイベントでも exit 0 固定で、`session_id` が無い・jq が無い・入力が壊れているときは何もしない。pr-mode.sh・notify.sh とは連携しない：verify-gate が続行させたターンでは、Stop で `/pr` のフラグが消えているため commit / push は拒否される（もう一度 `/pr` を実行する）。
+状態は `${TMPDIR:-/tmp}/claude-verify-gate-<session_id>` に 1 行 1 カテゴリで持つ。どのイベントでも exit 0 固定で、`session_id` が無い・jq が無い・入力が壊れているときは何もしない。pr-mode.sh とは連携しない：verify-gate が続行させたターンでは、Stop で `/pr` のフラグが消えているため commit / push は拒否される（もう一度 `/pr` を実行する）。notify.sh とは連携する：verify-gate が続行させた Stop（`stop_hook_active` が true でなく状態ファイルが空でない）では、notify.sh は完了通知を送らない（続行後の Stop で送る）。
 
 ## 公式プラグイン security-guidance（不採用）
 
@@ -159,7 +159,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `*.json` → `jq empty`。`settings.json` はさらに、`hooks` が参照する `$HOME/.claude/hooks/…` の実在を確認する
 - `*.sh` → `bash -n`
 - `*.awk` → `awk -f` による構文チェック（`strip-shell.awk` は2フックが共有する）
-- `skills/*/SKILL.md`・`agents/*.md` → frontmatter（1行目が `---` で始まる・`name:` がある・`description:` がある）
+- `skills/*/SKILL.md`・`agents/*.md` → frontmatter（1行目が `---` で始まる・`name:` がある・`description:` がある・閉じの `---` がある）
 
 失敗時は `exit 2` として stderr にエラーを返し、Claude にその場で修正させる（編集自体は巻き戻さない）。自動生成ファイル（`~/.claude/projects` 等）は対象外。
 
@@ -169,7 +169,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 bash .claude/tests/run.sh
 ```
 
-settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（1行目の `---`・`name:`・`description:` に加え、閉じの `---` があること）、settings.json のフック・`statusLine` の登録元検査、5 フック（pr-mode / guard-destructive / validate-claude-config / verify-gate / notify）のテーブル駆動テストと /git-pull の `pull.sh` の挙動テストを 1 分ほどで実行する。登録元検査は、フックのコマンドが `bash $HOME/.claude/hooks/<実在するスクリプト>.sh` であることと、許可リスト（`run.sh` の `ALLOWED_EXTERNAL_*`）に載った Orca だけを例外とすることを確認する（外部アプリが settings.json へ黙って書き込んだフックを検出する。新しい外部ツールは中身を確認してから許可リストに足す）。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。`test-pr-mode.sh` は `HOME` を一時ディレクトリに向けて実行するので、本物のログ `~/.claude/pr-mode.log` には書き込まない。`hooks/` の 5 本と `lib/strip-shell.awk` を変更したときは必ず通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
+settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`hooks/lib/*.awk` の構文、SKILL.md / agents の frontmatter（`validate-claude-config.sh` と同じ条件）、`skills/*/*.mjs` と `claude-notify/*.mjs` の `node --check`（node が無ければ省略）、dev-roots の各ルートが `.claude/CLAUDE.md` と `autoMode.environment` に含まれるかの検査（写しの不足だけを見る。dev-roots から外したルートが写しに残っていても検出しない）、settings.json のフック・`statusLine` の登録元検査、フック 5 本（ファイル構成表の `tests/` 参照）のテーブル駆動テストと /git-pull の `pull.sh` の挙動テストを 1 分ほどで実行する。登録元検査は、フックのコマンドが `bash $HOME/.claude/hooks/<実在するスクリプト>.sh` であることと、許可リスト（`run.sh` の `ALLOWED_EXTERNAL_*`）に載った Orca だけを例外とすることを確認する（外部アプリが settings.json へ黙って書き込んだフックを検出する。新しい外部ツールは中身を確認してから許可リストに足す）。`tests/` 自体は `setup.sh` の配布対象外（`~/.claude` にはリンクされない）。`test-pr-mode.sh` は `HOME` を一時ディレクトリに向けて実行するので、本物のログ `~/.claude/pr-mode.log` には書き込まない。`hooks/` のフック 5 本と `lib/strip-shell.awk` を変更したときは必ず通す。作業コピーのフックを試すときは `HOOKS_DIR=/path/to/hooks bash .claude/tests/run.sh`。
 
 ## 緊急時の復旧（セーフモード）
 
@@ -177,7 +177,7 @@ settings.json の JSON 構文、シェルスクリプト全体の `bash -n`、`h
 
 ## iPhoneプッシュ通知（claude-notify）
 
-`Stop`（タスク完了）/ `Notification`（許可待ち。matcher で `permission_prompt` のみ）イベントで `hooks/notify.sh` を実行し、Web Push で iPhone の PWA に通知する。送信本体（`claude-notify/send-push.mjs`）はこのリポジトリに同梱で、notify.sh が自身の実体パスから場所を解決する。依存（`web-push`）は `darwin-rebuild switch` 時に自動導入される。依存が入っていない PC、`HOME` が無い環境では何もせず静かに終了する（何が起きても exit 0）。送信に使う node は環境変数 `CLAUDE_NOTIFY_NODE` で差し替えられる。`Stop` は、バックグラウンドのサブエージェント（`<transcript_path から .jsonl を除いた場所>/subagents/agent-*.meta.json` の `requestShape` が `background` で `finished` が `true` でないもの）が実行中なら送らない。バックグラウンドのサブエージェントが終わるたびにメインのターンが再開して `Stop` が走るため、そのままだと待ちに入った時点とサブエージェント 1 本ごとに通知が飛ぶ（最後の 1 本が終わった後の `Stop` だけ送る）。中断（TaskStop・Esc・ツール実行の拒否）で止まったもの（記録 `.jsonl` の最終行が `Request interrupted by user`）と、`finished` が書かれないまま記録が 15 分更新されていないものは実行中と見なさない。ワークフローの配下は見ないので、ワークフロー実行中の待ちでは通知が出る。受信側の PWA は別リポジトリ claude-notify-mobile にあり、仕組みは同リポジトリの `docs/` を参照。
+`Stop`（タスク完了）/ `Notification`（許可待ち。matcher で `permission_prompt` のみ）イベントで `hooks/notify.sh` を実行し、Web Push で iPhone の PWA に通知する。送信本体（`claude-notify/send-push.mjs`）はこのリポジトリに同梱で、notify.sh が自身の実体パスから場所を解決する。依存（`web-push`）は `darwin-rebuild switch` 時に自動導入される。`claude-notify/node_modules/web-push` が無い PC は、ログに 1 行残して何もせず終了する。`send-push.mjs`・jq・`HOME` が無い環境では何もせず静かに終了する（何が起きても exit 0）。送信に使う node は環境変数 `CLAUDE_NOTIFY_NODE` で差し替えられる。同じイベント・同じプロジェクトの通知は `filters.debounceSeconds`（既定 30 秒）以内なら送らず、通知の tag もイベント＋プロジェクトの組にする（別プロジェクトの通知は落ちず、受信側で置き換わらない）。`Stop` は、バックグラウンドのサブエージェント（`<transcript_path から .jsonl を除いた場所>/subagents/agent-*.meta.json` の `requestShape` が `background` で `finished` が `true` でないもの）が実行中なら送らない。バックグラウンドのサブエージェントが終わるたびにメインのターンが再開して `Stop` が走るため、そのままだと待ちに入った時点とサブエージェント 1 本ごとに通知が飛ぶ（最後の 1 本が終わった後の `Stop` だけ送る）。中断（TaskStop・Esc・ツール実行の拒否）で止まったもの（記録 `.jsonl` の最終行が `Request interrupted by user`）と、`finished` が書かれないまま記録が 15 分更新されていないものは実行中と見なさない。ワークフローの配下は見ないので、ワークフロー実行中の待ちでは通知が出る。受信側の PWA は別リポジトリ claude-notify-mobile にあり、仕組みは同リポジトリの `docs/` を参照。
 
 新しい PC で使うには（`darwin-rebuild switch` 実行後）:
 

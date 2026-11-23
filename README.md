@@ -56,7 +56,7 @@ dotfiles/
 │   ├── package.json       # 依存は web-push のみ
 │   └── pnpm-lock.yaml     # node_modules は activation 時に自動導入（gitignore）
 └── .claude/
-    ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・ワークツリー・検証・レビューの範囲・秘密情報・Nix運用・モデル運用・完了の合図）
+    ├── CLAUDE.md          # グローバル指示（節の一覧は .claude/README.md のファイル構成）
     ├── settings.json      # permissions・フック登録・言語などの設定
     ├── setup.sh           # .claude/ 配下（gitが管理するファイル）を ~/.claude へシンボリックリンク
     ├── dev-roots          # 削除・作業ディレクトリ作成の許可ルートの唯一の定義（guard-destructive.sh・nix/home.nix・testsが読む）
@@ -140,9 +140,9 @@ nix flake update
 - `bash vscode/install-extensions.sh`：`vscode/extensions.txt`の拡張機能をVSCode/Cursorへ導入（`darwin-rebuild switch`時にも自動実行される。冪等）
 
 ### 検証（sudo不要）
-- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter・settings.json のフック登録元）とフック5本（pr-mode・guard-destructive・verify-gate・validate-claude-config・notify）のテーブル駆動テストと /git-pull の挙動テスト一式を1分ほどで実行。`.claude/hooks/`を変更したら必ず通す
+- `bash .claude/tests/run.sh`：`.claude/`の構文チェックとフックのテスト一式を1分ほどで実行（内容は`.claude/README.md`の「検証（テスト）」）。フックを変更したら必ず通す（対象の正は`.claude/README.md`の「検証ゲート」）
 - `nix eval --raw .#darwinConfigurations.mac.system.drvPath`：`flake.nix` / `nix/`の評価エラーと`git add`漏れを検出（`switch`の前に流す。options.jsonのwarningは上流由来で無視してよい）
-- `.claude/dev-roots`（削除・作業ディレクトリの許可ルート。1行1パス・`~/`始まり・`#`から行末はコメント）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
+- `.claude/dev-roots`（削除・作業ディレクトリの許可ルート。読み方は同ファイル冒頭のコメント）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
 
 ### GitHub Actionsワークフローのコピー
 導入したいリポジトリのルートに移動して、そのまま実行する：
