@@ -6,6 +6,7 @@ macOS環境全体をNix（nix-darwin + home-manager + nix-homebrew）で宣言�
 ## 技術スタック
 - Nix / nix-darwin / home-manager / nix-homebrew（macOS環境全体の宣言的管理。`flake.nix` + `nix/`）
 - Homebrew（GUIアプリのcaskとApp Storeアプリ。本体はnix-homebrewが導入）
+- Terminal.app（`terminal/Dotfiles.terminal`のプロファイルを`darwin-rebuild switch`のたびに取り込み、JetBrainsMono Nerd FontはNixで導入。`terminal/README.md`参照）
 - Zsh（oh-my-zsh + Powerlevel10k。`~/.zshrc`・`~/.p10k.zsh` へリンク。`zsh/README.md` 参照）
 - VSCode / Cursor（`vscode/`配下の共通設定をhome-manager経由で書き込み可能リンクし、拡張機能をactivation時に自動導入）
 - direnv / nix-direnv（`nix/home.nix`のhome-manager設定で導入。`.envrc`のあるプロジェクトディレクトリでflakeのdevShellを自動ON/OFF）
@@ -43,6 +44,9 @@ dotfiles/
 ├── .github/
 │   └── workflows/
 │       └── delete-merged-branch.yml # PRマージ後にheadブランチを自動削除（他リポジトリへ配布用だが、このリポジトリ自身のPRにも発火する）
+├── terminal/
+│   ├── Dotfiles.terminal  # Terminal.app のプロファイル（フォント・配色・行間・透過。switch のたびに取り込む）
+│   └── README.md
 ├── zsh/
 │   ├── .zshrc             # zsh 設定（oh-my-zsh + Powerlevel10k・direnv フック。~/.zshrc へリンク）
 │   ├── .p10k.zsh          # Powerlevel10k のプロンプト設定（~/.p10k.zsh へリンク）
@@ -53,7 +57,7 @@ dotfiles/
 │   └── pnpm-lock.yaml     # node_modules は activation 時に自動導入（gitignore）
 └── .claude/
     ├── CLAUDE.md          # グローバル指示（言語・Git操作の制限・ファイル削除・ワークツリー・検証・レビューの範囲・秘密情報・Nix運用・モデル運用・完了の合図）
-    ├── settings.json      # permissions・env・フック登録・言語などの設定
+    ├── settings.json      # permissions・フック登録・言語などの設定
     ├── setup.sh           # .claude/ 配下（gitが管理するファイル）を ~/.claude へシンボリックリンク
     ├── dev-roots          # 削除・作業ディレクトリ作成の許可ルートの唯一の定義（guard-destructive.sh・nix/home.nix・testsが読む）
     ├── claude-notify.example.json # iPhoneプッシュ通知設定のテンプレート（~/.claude/claude-notify.json へコピー）
@@ -72,6 +76,7 @@ dotfiles/
     │   ├── pr/SKILL.md               # /pr スキル
     │   ├── readme/SKILL.md           # /readme スキル
     │   ├── clean-branches/SKILL.md   # /clean-branches スキル
+    │   ├── merge-worktree/SKILL.md   # /merge-worktree スキル
     │   ├── git-pull/
     │   │   ├── SKILL.md              # /git-pull スキル
     │   │   └── pull.sh               # /git-pull の本体スクリプト
@@ -91,7 +96,7 @@ dotfiles/
 ```zsh
 curl -fsSL https://raw.githubusercontent.com/seino914/dotfiles/main/bootstrap.sh | bash
 ```
-`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用（このとき`.claude/dev-roots`に列挙した作業ディレクトリ（現在`~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`・`~/Dev/humanoid`）も作成される）、Claude Code・Codex・Cursor・Devin の各CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
+`bootstrap.sh`がXcode Command Line Toolsの確認、Nix（Determinate Systemsインストーラー）の導入、`~/Dev/seino914/dotfiles`へのクローン、`flake.nix`の`username`書き換え、nix-darwinの初回適用（このとき`.claude/dev-roots`に列挙した作業ディレクトリも作成される）、Claude Code・Codex・Cursor・Devin の各CLIの導入までを1コマンドで行う（冪等）。手動で必要な残作業（App Storeサインイン、Mosのアクセシビリティ許可等）は[nix/README.md](/nix/README.md)を参照。
 
 ### Nix環境の適用・更新（2回目以降）
 ```zsh
@@ -125,7 +130,8 @@ nix flake update
 - `/pr`：現在の変更をコミットし、ブランチをpushしてGitHubへPull Requestを作成する（ユーザー起動限定）
 - `/readme`：READMEをコードベースの現状に合わせて更新（なければ新規作成）する
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
-- `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（main / master）に切り替えて `git pull --ff-only` し、ローカルを最新にする
+- `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）に切り替え、fetch して `git merge --ff-only` でローカルを最新にする
+- `/merge-worktree`：自分が起動したサブエージェントのワークツリーを、完了後に未コミットで元の作業ツリーへ取り込んで削除する（モデルから呼べる）
 - `/ui-compare`：最後のコミットと今の作業ツリーの画面を撮り、修正前後を見比べる HTML を一時領域に作る（ユーザー起動限定）
 - `/nix-setup`：開発環境を Nix の devShell + direnv で用意し、linter / formatter・CI・Dependabot・マージ済みブランチ自動削除も整える
 
@@ -134,7 +140,7 @@ nix flake update
 - `bash vscode/install-extensions.sh`：`vscode/extensions.txt`の拡張機能をVSCode/Cursorへ導入（`darwin-rebuild switch`時にも自動実行される。冪等）
 
 ### 検証（sudo不要）
-- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter・settings.json のフック登録元）とフック（pr-mode・guard-destructive・verify-gate・validate-claude-config）のテーブル駆動テストと /git-pull の挙動テスト一式を1分ほどで実行。`.claude/hooks/`を変更したら必ず通す
+- `bash .claude/tests/run.sh`：`.claude/`の構文チェック（settings.json・シェルスクリプト・awk・SKILL.md frontmatter・settings.json のフック登録元）とフック5本（pr-mode・guard-destructive・verify-gate・validate-claude-config・notify）のテーブル駆動テストと /git-pull の挙動テスト一式を1分ほどで実行。`.claude/hooks/`を変更したら必ず通す
 - `nix eval --raw .#darwinConfigurations.mac.system.drvPath`：`flake.nix` / `nix/`の評価エラーと`git add`漏れを検出（`switch`の前に流す。options.jsonのwarningは上流由来で無視してよい）
 - `.claude/dev-roots`（削除・作業ディレクトリの許可ルート。1行1パス・`~/`始まり・`#`から行末はコメント）を変更したときは、`git add .claude/dev-roots`（flakeはgit追跡ファイルしか読まない）のうえで上記2つを実行し、`bash .claude/setup.sh`も再実行する
 
