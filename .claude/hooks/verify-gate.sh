@@ -16,6 +16,7 @@
 #                （run.sh が検査するものだけ。skills 配下の参考資料の .md や agents のサブディレクトリは対象外）
 #     nix eval … flake.nix・flake.lock・nix/**/*.nix（nix/README.md 等のドキュメントは対象外）
 #     両方     … .claude/dev-roots（guard-destructive.sh とテストが読むうえ、nix/home.nix も readFile で読む）
+#   （.claude/worktrees/<名前>/ 内の編集は、その接頭辞を剥がして同じ規則で分類する）
 # - PostToolUse(Bash): 成功した Bash のうち、コマンドに tests/run.sh を含み（cwd が .claude の相対実行も数える） stdout に行全体が「すべて通過」の行が
 #   あれば run.sh を、コマンドに darwinConfigurations.mac.system.drvPath を含み stdout に行全体が /nix/store/<名前>.drv の
 #   行があれば nix eval を記録から消す（| tail でパイプすると終了コードは tail のものになるため出力で判定する。
@@ -62,6 +63,8 @@ resolve() {
 classify() {
   local rel
   case "$1" in "$ROOT"/*) rel="${1#"$ROOT"/}" ;; *) return 0 ;; esac
+  # ワークツリー内の編集は接頭辞（.claude/worktrees/<名前>/）を剥がして分類する
+  [[ "$rel" =~ ^\.claude/worktrees/[^/]+/(.+)$ ]] && rel="${BASH_REMATCH[1]}"
   case "$rel" in
     .claude/dev-roots) printf 'run.sh\nnix eval\n' ;;
     .claude/hooks/* | .claude/tests/* | .claude/settings.json | .claude/setup.sh | bootstrap.sh) printf 'run.sh\n' ;;
