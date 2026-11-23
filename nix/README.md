@@ -51,7 +51,7 @@ sudo darwin-rebuild switch --flake ~/Dev/seino914/dotfiles#mac
 
 - 既存の `/opt/homebrew` は nix-homebrew の `autoMigrate = true` により自動で管理下へ取り込まれる
 - 既存のbrew formula（CLI）はNix側と重複しても自動削除されない（`cleanup = "none"`）。Nix側の動作確認後に `brew uninstall` で徐々に整理する
-- `~/.zshrc` は既定では管理しない（`home.nix` の `manageZshrc = false`。現用の `~/.zshrc` は旧 `~/dotfiles` へのリンクのまま使う決定事項）。このリポジトリの zsh 設定へ切り替えるときは `manageZshrc = true` にして適用する。手順は [`../zsh/README.md`](../zsh/README.md)
+- `~/.zshrc`・`~/.p10k.zsh` は `force = true` で `zsh/` へのリンクに置き換わる。oh-my-zsh・Powerlevel10k・プラグインは Nix では入れないので、先に `~/.oh-my-zsh` へ入れておく（[`../zsh/README.md`](../zsh/README.md)）
 
 ## よくある操作
 
@@ -82,7 +82,7 @@ sudo darwin-rebuild switch --flake .#mac
 
 ## 注意
 
-- direnvは`home.nix`の`programs.direnv`（nix-direnv併用）で導入している。`.envrc`のあるプロジェクトディレクトリに`cd`すると、そのプロジェクトの`flake.nix`のdevShellが自動で有効化/無効化される。ただし`~/.zshrc`はhome-manager非管理（現在は旧`~/dotfiles`への素のリンク。`manageZshrc = false`）のため`enableZshIntegration`ではzshフックが注入されず、フックはzsh設定に直接書く必要がある。**実際に効いているのは旧`~/dotfiles/zsh/.zshrc`側**で、切り替え後に備えて[`../zsh/.zshrc`](../zsh/.zshrc)にも同じフックを持たせてある
+- direnvは`home.nix`の`programs.direnv`（nix-direnv併用）で導入している。`.envrc`のあるプロジェクトディレクトリに`cd`すると、そのプロジェクトの`flake.nix`のdevShellが自動で有効化/無効化される。ただし`~/.zshrc`は`programs.zsh`ではなく[`../zsh/.zshrc`](../zsh/.zshrc)へのリンクで管理しているため、`enableZshIntegration`ではzshフックが注入されない。フックは`zsh/.zshrc`に直接書いてある
 - flakeは**gitに追跡されているファイルしか認識しない**。新しい `.nix` ファイルを追加したら `git add` してから適用すること。`home.nix` が `builtins.readFile` で読む [`../.claude/dev-roots`](../.claude/dev-roots) も同様で、変更したら `git add` してから `nix eval --raw .#darwinConfigurations.mac.system.drvPath` を通す
 - 作業ディレクトリ（`devDirs`）の定義は `.claude/dev-roots` 1か所だけ。同じファイルを `.claude/hooks/guard-destructive.sh` が「Claude Code が確認なしで削除できる許可ルート」として読むので、`home.nix` 側にディレクトリ名を直接書かないこと
 - リポジトリの配置は `~/Dev/seino914/dotfiles` 固定（`flake.nix` の `dotfilesPath` がユーザー名から自動で導かれる）。別の場所に置きたい場合は `dotfilesPath` と `bootstrap.sh` の両方を変更する

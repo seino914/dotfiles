@@ -8,7 +8,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `vscode/` — VSCode / Cursor 共通設定の実体。書き込み可能リンクで両エディタへ配る（詳細 `vscode/README.md`）
 - `git/ignore` — git 全体共通の ignore の実体（`~/.config/git/ignore` へ書き込み可能リンク。`.claude/settings.local.json` と `.claude/worktrees/` を除外）
 - `.claude/` — Claude Codeの**グローバル設定の実体**（settings.json・CLAUDE.md・hooks・skills・agents・dev-roots・tests。一覧は `.claude/README.md`）
-- `zsh/.zshrc` — プロンプト表示と direnv フック（**このPCでは未適用**。詳細は `zsh/README.md`）
+- `zsh/` — zsh 設定の実体（`.zshrc`：oh-my-zsh + Powerlevel10k・direnv フック、`.p10k.zsh`）。`~/.zshrc`・`~/.p10k.zsh` へ書き込み可能リンク（詳細は `zsh/README.md`）。WezTerm・Neovim の設定はここではなく旧リポジトリ `~/dotfiles`（dotfiles_sub）にある
 - `claude-notify/` — iPhoneへのWeb Push通知の送信側スクリプト（受信側PWAは別リポジトリ `claude-notify-mobile`）
 - `.github/workflows/` — 他リポジトリへコピーして使う配布用テンプレート。ただし `delete-merged-branch.yml` は**このリポジトリ自身のPRにも発火する**
 - `commands/` — 個人用の早見表メモ。`.claude/commands/`（カスタムスラッシュコマンド）ではない
@@ -43,8 +43,7 @@ macOS用の個人dotfiles。ビルド・lint は無く、テストは `.claude/t
 - `home.nix` の `.claude/` 処理をhome-manager標準管理へ移行する — `setup.sh` のセルフヒーリング（claude-code Issue #40857 対策。仕組みは `.claude/README.md`）はhome-managerで再現できない
 - `home.nix` の `editorUserFiles` から `force = true` を外す — 初回適用時に既存実体をリンクへ置き換えるのに必要
 - `flake.nix` の `username` ハードコードを動的取得にする — flakeは純粋評価で環境変数を読めない。`bootstrap.sh` がクローン時に `sed` で書き換える設計
-- `~/.zshrc` のリンク先を張り替える・`home.nix` の `manageZshrc` をユーザーの指示なしに `true` にする・この件をユーザーに再確認する — ユーザーの確定した決定（2026-09-04）。現在の `~/.zshrc` は旧 `~/dotfiles` へのリンクのまま使う。経緯と切り替え手順は `zsh/README.md`
-- direnvのzshフックを `programs.direnv.enableZshIntegration` に置き換える — `~/.zshrc` はhome-manager非管理のため注入されない。フックは `.zshrc` に直書きする
+- direnvのzshフックを `programs.direnv.enableZshIntegration` に置き換える — `~/.zshrc` は `programs.zsh` ではなく `zsh/.zshrc` へのリンクで管理しているため注入されない。フックは `.zshrc` に直書きする
 - `claude-code`・Codex・Cursor・Devin の各CLIをNix管理に入れる — 常に最新版を使うため公式インストーラーの自動更新版を採用（packages.nixのコメント参照）
 - `sudo darwin-rebuild switch` を実行しようとする — sudoが必要で実行不可。検証を通したうえでユーザーに依頼する
 - /pr フロー四層のうち一層だけを変更する — 整合が壊れる（後述）
