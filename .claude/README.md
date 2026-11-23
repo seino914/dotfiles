@@ -22,12 +22,13 @@
 | `skills/readme/SKILL.md` | `/readme` スキル：READMEの更新・新規作成。`model: sonnet` |
 | `skills/pr/SKILL.md` | `/pr` スキル：変更を目的ごとにコミットし、pushしてPRを作成（open な PR があれば `gh pr edit` で更新）。`disable-model-invocation: true` |
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
+| `skills/merge-worktree/SKILL.md` | `/merge-worktree` スキル：自分が起動したサブエージェントのワークツリーを、完了後に未コミットで元の作業ツリーへ取り込んで削除する。モデルから呼べる |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
 | `skills/ui-compare/`（`SKILL.md`・`ui-compare.sh`・`capture.mjs`・`build.mjs`・`template.html`） | `/ui-compare` スキル：最後のコミットと作業ツリーの画面をヘッドレス Chrome（CDP 直叩き。npm 依存なし）で撮り、修正前後を見比べる HTML を一時領域に作る。`disable-model-invocation: true` |
 | `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot・ブランチ自動削除を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
-| `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
+| `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh・notify.sh（5 本）のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
 
 ## セットアップ（反映方法）
 
@@ -65,10 +66,12 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
 - `permissions.defaultMode`：`auto`（方針として明示している。VSCode 拡張の `claudeCode.initialPermissionMode` は `auto` を受け付けないので設定しないこと）。`permissions.ask` ルールとフックの ask / deny は auto mode でも効く
 - `autoMode.environment`：auto mode の分類器に環境（信頼できる push・PR 作成先、`dev-roots` の作業ルート、Nix 管理と `~/.claude` のリンク構成）を自然文で伝える。**`"$defaults"` を外すと組み込みの既定が丸ごと置き換わるので外さない**
 - Orca のフックと `statusLine`：外部のエージェント管理アプリ Orca（`~/.orca/agent-hooks/`）が書き込んだもの（コマンドに `orca` を含むエントリ）。Orca 外では何もせず `{}` を返すだけで、権限判定には関与しない。Orca が書き換えるので手で編集しない。書き換え前に作る `settings.json.bak` は `.gitignore` と `setup.sh` で除外してある
-- `deniedMcpServers`：未使用の claude.ai コネクタ（Gmail / Google Calendar / Google Drive）を読み込まない。使いたくなったらこの配列から外す
+- `deniedMcpServers`：未使用の claude.ai コネクタ（Gmail / Google Calendar / Google Drive）をサーバー名（`claude.ai Gmail` 等）で拒否する設定。ただし 2026-11-23 にデスクトップアプリ（Code タブ）のセッションでこの 3 つのコネクタが読み込まれていることを確認した（原因は未切り分け：サーバー名の不一致か、アプリのコネクタがこの設定の対象外か）。デスクトップアプリではアプリのコネクタ設定で無効化する。CLI でこの設定が効くかは未確認。使いたくなったらこの配列から外す
 - Playwright MCP：ユーザースコープで全プロジェクトに有効。dotfiles では使わないので、gitignore 済みの `.claude/settings.local.json` の `deniedMcpServers` で止めている
 - `tui`：`fullscreen`
-- `agentPushNotifEnabled`：`true`（公式のスマホ通知機能。claude-notifyとは別系統）
+- `worktree.baseRef`：`head`（ワークツリーを現在の HEAD から作る）
+- `skipWorkflowUsageWarning`：`true`（ワークフロー機能の使用量に関する警告を出さない）
+- `agentPushNotifEnabled`：`false`（公式のスマホ通知機能。claude-notifyとは別系統）
 
 ## フックの範囲（対象外の原則）
 
@@ -118,7 +121,7 @@ bash ~/Dev/seino914/dotfiles/.claude/setup.sh
   - `git reset --hard`、`git clean -f`、`checkout` / `switch` の `-f`、`checkout` / `restore` で全体（`.` `:/` `*`）を指すもの、`stash drop` / `clear`、`branch -D`、`.git` の `rm`（`.git` の `rm` 以外の git は、対象のリポジトリ（`-C` の値、無ければ同じコマンド内の `cd` 先、無ければ cwd）が一時領域の中なら出さない。スクラッチに clone した検証用リポジトリの `reset --hard` 等）
   - `pkill` / `killall`、`kill -1`
 - 判定材料：`lib/strip-shell.awk` で HEREDOC 本文と行末コメントを除き、引用符の中は 1 トークンにして `;` `&` `|` 改行・バッククォートで区切った各コマンドを先頭語で見分ける（`if` / `then` / `do` / `{` / `(` 等の制御構文の語は読み飛ばし、その後ろのコマンドを見る）。相対パスは、そのコマンドより前の最後のリテラルの `cd` / `pushd` の行き先（区切りは問わない。無ければ cwd）を基準にする。`bash -c` / `sh -c` / `eval` に渡した文字列は 1 段だけ取り出して再判定する
-- 許可ルートの定義は `dev-roots` だけ（現在 `~/Dev/kaishi`・`~/Dev/seino914`・`~/Dev/hobby`・`~/Dev/humanoid`）。理由文は「何をするコマンドか（対象を含む）」＋「なぜ確認が要るか」で書く
+- 許可ルートの定義は `dev-roots` だけ。理由文は「何をするコマンドか（対象を含む）」＋「なぜ確認が要るか」で書く
 - 何が起きても exit 0（判定不能なら通常の permission 判定に委ねる）。`git push` の force / delete は `pr-mode.sh` が扱うので見ない
 
 ## コミット時の秘密検査

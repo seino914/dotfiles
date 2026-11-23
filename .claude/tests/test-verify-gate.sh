@@ -11,14 +11,15 @@ cleanup() { rm -rf "$W"; }
 trap cleanup EXIT
 cleanup
 mkdir -p "$W/repo/.claude/hooks/lib" "$W/repo/.claude/tests" "$W/repo/.claude/skills/x/sub" "$W/repo/.claude/agents/sub" \
-  "$W/repo/nix" "$W/repo/docs" "$W/outside" "$W/home/.claude" "$W/tmp"
+  "$W/repo/.claude/worktrees/wt/.claude/hooks" "$W/repo/.claude/worktrees/wt/nix" "$W/repo/.claude/worktrees/wt/docs" "$W/repo/nix" "$W/repo/docs" "$W/outside" "$W/home/.claude" "$W/tmp"
 cp "$HOOK" "$W/repo/.claude/hooks/verify-gate.sh"
 H="$W/repo/.claude/hooks/verify-gate.sh"
 ROOT="$(cd "$W/repo" && pwd -P)"   # macOS の TMPDIR（/var/…）は /private/var/… へのリンクなので実体で比べる
 ST="$W/tmp"
 for f in .claude/hooks/x.sh .claude/hooks/lib/strip-shell.awk .claude/tests/test-x.sh .claude/settings.json .claude/dev-roots \
   .claude/setup.sh .claude/skills/x/SKILL.md .claude/skills/x/ref.md .claude/skills/x/sub/SKILL.md .claude/skills/x/tool.sh \
-  .claude/agents/a.md .claude/agents/sub/b.md .claude/README.md bootstrap.sh flake.nix flake.lock nix/home.nix nix/README.md README.md CLAUDE.md docs/x.md; do
+  .claude/agents/a.md .claude/agents/sub/b.md .claude/README.md bootstrap.sh flake.nix flake.lock nix/home.nix nix/README.md README.md CLAUDE.md docs/x.md \
+  .claude/worktrees/wt/.claude/hooks/x.sh .claude/worktrees/wt/nix/home.nix .claude/worktrees/wt/docs/x.md; do
   : > "$W/repo/$f"
 done
 : > "$W/outside/foo.sh"
@@ -155,6 +156,9 @@ none $W/repo/.claude/skills/x/sub/SKILL.md
 none $W/repo/.claude/agents/sub/b.md
 none $W/outside/foo.sh
 none $W/repo/.claude/hooks/link-out.sh
+run.sh $W/repo/.claude/worktrees/wt/.claude/hooks/x.sh
+nix_eval $W/repo/.claude/worktrees/wt/nix/home.nix
+none $W/repo/.claude/worktrees/wt/docs/x.md
 EOF
 rm -f "$ST/claude-verify-gate-$S3"
 edit "$S3" NotebookEdit "$W/repo/.claude/skills/x/nb.ipynb" >/dev/null

@@ -14,11 +14,18 @@
 #   rename のアトミック書き込みを行うため、リンクが実体で上書きされることがある。
 #   claude-code Issue #40857）は、実体の方が新しければリポジトリへ取り込み、
 #   古ければ ~/.claude/.setup-backups/ へ退避してからリンクし直す（セルフヒーリング）
+# - ワークツリー（*/.claude/worktrees/*）内のコピーからは実行しない。~/.claude のリンクがそのワークツリーを指し、
+#   削除すると切れリンクになるため。必ず元のリポジトリの .claude/setup.sh を実行する
 # - 1 ファイルの失敗で残りを止めない。失敗は末尾にまとめて表示し、非ゼロで終了する
 
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "$SCRIPT_DIR" in
+  */.claude/worktrees/*)
+    echo "エラー: ワークツリー内の setup.sh は実行しません（~/.claude のリンクがワークツリーを指してしまうため）。元のリポジトリの .claude/setup.sh を実行してください" >&2
+    exit 1 ;;
+esac
 CLAUDE_DIR="$HOME/.claude"
 BACKUP_DIR="$CLAUDE_DIR/.setup-backups"
 STAMP="$(date +%Y%m%d_%H%M%S)"
