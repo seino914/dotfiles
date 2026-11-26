@@ -1,6 +1,6 @@
 ---
 name: nix-setup
-description: 新規・既存プロジェクトの開発環境を Nix の devShell + direnv で用意し、linter / formatter・CI・Dependabot・マージ済みブランチの自動削除も整える。「開発環境を作って」「devShellを用意して」などの依頼や /nix-setup 実行時に使用。
+description: 新規・既存プロジェクトの開発環境を Nix の devShell + direnv で用意し、linter / formatter・E2E テスト（任意）・CI・Dependabot・マージ済みブランチの自動削除も整える。「開発環境を作って」「devShellを用意して」などの依頼や /nix-setup 実行時に使用。
 model: sonnet
 ---
 
@@ -54,7 +54,13 @@ model: sonnet
      5. `biome check --write .` のあと `pnpm run lint` が exit 0 になるまでコードを直す（ルールの無効化・除外では通さない）
    - **Python は Ruff**（`ruff check .`・`ruff format --check .`）
 
-7. **CI（`.github/workflows/ci.yml`）**：新規は install と lint だけ（テスト・ビルドはコメント）、途中からは実在するコマンドに合わせる。`branches` は実際のデフォルトブランチ名。アクションの最新メジャーは `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` で確かめる
+7. **E2E テスト（任意）**：画面のある TypeScript プロジェクトで E2E テストを書くなら入れる（LP など画面のテストを書かないものは入れない。迷えば聞く）。途中からで既に入っていれば触らない
+   1. `nix develop -c pnpm add -D @playwright/test` → `nix develop -c pnpm exec playwright install chromium`（ブラウザは `~/Library/Caches/ms-playwright` に入り、プロジェクト間で共有される）
+   2. **devShell に nixpkgs の `playwright-driver` / `playwright-test` を入れない**。npm の `@playwright/test` と版が完全に一致しないとブラウザが見つからず起動しないので、ブラウザの取得は npm 側の `playwright install` に任せる
+   3. `playwright.config.ts` を最小で書く（`testDir: './e2e'`、`webServer` に開発サーバーのコマンドと URL、`reuseExistingServer: !process.env.CI`）。`.gitignore` に `test-results/`・`playwright-report/` を足す
+   4. package.json に `"test:e2e": "playwright test"`。CI には手順 8 のコメント行のとおり置く
+
+8. **CI（`.github/workflows/ci.yml`）**：新規は install と lint だけ（テスト・ビルドはコメント）、途中からは実在するコマンドに合わせる。`branches` は実際のデフォルトブランチ名。アクションの最新メジャーは `gh api repos/<owner>/<repo>/releases/latest --jq .tag_name` で確かめる
 
    ```yaml
    name: CI
@@ -73,9 +79,12 @@ model: sonnet
          - run: nix develop -c pnpm install --frozen-lockfile
          - run: nix develop -c pnpm run lint
          # - run: nix develop -c pnpm test
+         # E2E（手順 7 で入れたとき）。--with-deps はブラウザが要る OS のライブラリも入れる
+         # - run: nix develop -c pnpm exec playwright install --with-deps chromium
+         # - run: nix develop -c pnpm run test:e2e
    ```
 
-8. **Dependabot（`.github/dependabot.yml`）**：`github-actions` と、マニフェストが実在するエコシステム（pnpm も `npm`、Python は `pip`）だけ。ユーザーの決定で、毎週月曜にエコシステムごと 1 つの PR にまとめる
+9. **Dependabot（`.github/dependabot.yml`）**：`github-actions` と、マニフェストが実在するエコシステム（pnpm も `npm`、Python は `pip`）だけ。ユーザーの決定で、毎週月曜にエコシステムごと 1 つの PR にまとめる
 
    ```yaml
    version: 2
@@ -94,9 +103,9 @@ model: sonnet
            patterns: ["*"]
    ```
 
-9. **マージ済みブランチの自動削除**：`~/Dev/seino914/dotfiles/.github/workflows/delete-merged-branch.yml` を `.github/workflows/` へコピーする（既にあれば上書きしない）
+10. **マージ済みブランチの自動削除**：`~/Dev/seino914/dotfiles/.github/workflows/delete-merged-branch.yml` を `.github/workflows/` へコピーする（既にあれば上書きしない）
 
-10. **Dependabot の PR にだけレビュー依頼を出す**（`.github/workflows/dependabot-review-request.yml`）。`dependabot.yml` の `reviewers` は廃止済み、CODEOWNERS は全 PR に効くので使わない。`pull_request_target` には変えない
+11. **Dependabot の PR にだけレビュー依頼を出す**（`.github/workflows/dependabot-review-request.yml`）。`dependabot.yml` の `reviewers` は廃止済み、CODEOWNERS は全 PR に効くので使わない。`pull_request_target` には変えない
 
    ```yaml
    name: Dependabot Review Request
@@ -118,7 +127,7 @@ model: sonnet
            run: gh api --method POST "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers" -f "reviewers[]=$REVIEWER"
    ```
 
-11. **検証コマンドをプロジェクトの CLAUDE.md に書く**（無ければ作り、あれば追記）：実在するもの（`nix develop -c pnpm run lint` 等）だけ。以後のセッションはここに書かれたコマンドで検証する
+12. **検証コマンドをプロジェクトの CLAUDE.md に書く**（無ければ作り、あれば追記）：実在するもの（`nix develop -c pnpm run lint` 等）だけ。以後のセッションはここに書かれたコマンドで検証する
 
 ## 検証と報告
 
