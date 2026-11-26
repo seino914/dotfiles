@@ -59,7 +59,8 @@ bash ${CLAUDE_SKILL_DIR}/prepare-before.sh <作業ディレクトリ>/before-src
 node ${CLAUDE_SKILL_DIR}/shoot.mjs <作業ディレクトリ>/shots.json <作業ディレクトリ>/shots [id,...]
 ```
 
-- Playwright（`playwright-core` / `playwright` / `@playwright/test`）を `repo` の `node_modules` から読む。どれも無ければ、そう報告して止まる（勝手にインストールしない）。
+- Bash ツールの `timeout` は `600000` にして実行する（既定の 120 秒では、待ちが 1 つ外れただけで失敗の報告より先に打ち切られる）。
+- Playwright（`playwright-core` / `playwright` / `@playwright/test`）を `repo` の `node_modules` から読む。どれも無ければ `nix build nixpkgs#playwright-driver` で Nix ストアから取って使う（プロジェクトの依存には足さない。初回だけ取得に数十秒かかる）。
 - 出力は `<id>-before.png` / `<id>-after.png`。3 番目の引数で一部だけ撮り直せる。撮る前に同じ名前の前回の画像を消すので、失敗した分は画像が無い状態になる。
 - **終了コードが 0**（全部撮れた）であることを確かめる。失敗があれば原因を直して、その id だけ撮り直す。
 - **撮った画像は必ず全部 Read して確かめる**。今までに起きた失敗:
@@ -75,9 +76,10 @@ node ${CLAUDE_SKILL_DIR}/shoot.mjs <作業ディレクトリ>/shots.json <作業
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/build-report.mjs <作業ディレクトリ>/report.json <作業ディレクトリ>/shots <作業ディレクトリ>/report.html
-node ${CLAUDE_SKILL_DIR}/verify-report.mjs <作業ディレクトリ>/report.html <作業ディレクトリ>/verify <Playwright のあるリポジトリ>
+node ${CLAUDE_SKILL_DIR}/verify-report.mjs <作業ディレクトリ>/report.html <作業ディレクトリ>/verify <対象リポジトリ>
 ```
 
+- verify-report も Bash ツールの `timeout` は `600000` にして実行する。
 - build-report と verify の**両方の終了コードが 0** であること（「画像が無かったもの」が出ていない・「壊れた画像: 0／欠落した画像: 0」）を確かめ、`report-top.png` と節の画像を Read して崩れが無いか見る。
 - 説明文は利用者向けの言葉で書く（内部の関数名・ファイル名は出さない。必要なら `<code>` で最小限）。
   - 各節: `desc` に「どの画面で・どの条件で撮ったか」、`before` / `after` に「何が問題で、どう変わったか」
@@ -93,7 +95,7 @@ node ${CLAUDE_SKILL_DIR}/verify-report.mjs <作業ディレクトリ>/report.htm
 
 ```jsonc
 {
-  "repo": "/abs/path/to/repo",            // Playwright を読むリポジトリ（既定: カレント）
+  "repo": "/abs/path/to/repo",            // Playwright を探すリポジトリ（既定: カレント。無ければ Nix から取る）
   "sides": { "before": "http://localhost:3801", "after": "http://localhost:3000" },
   "login": {                              // 省略するとログインしない
     "path": "/login",

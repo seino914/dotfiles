@@ -1,21 +1,39 @@
 // ui-compare の共通処理（Playwright の読み込み・Chrome の場所）
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
-/** 対象リポジトリの node_modules から playwright-core（無ければ playwright）を読む */
+/**
+ * 対象リポジトリの node_modules から playwright-core（無ければ playwright）を読む。
+ * どれも無ければ nixpkgs の playwright-driver（中身は playwright-core そのもの）を
+ * ストアに取得して使う。プロジェクトにもグローバル環境にも何も入れない
+ */
 export function loadChromium(repo) {
   const require = createRequire(join(repo, 'package.json'));
   for (const name of ['playwright-core', 'playwright', '@playwright/test']) {
     try {
       return require(name).chromium;
     } catch {
-      // 次の候補を試す（見つからなければ下でまとめて伝える）
+      // 次の候補を試す（見つからなければ Nix から取る）
     }
   }
-  throw new Error(
-    `${repo} に playwright-core / playwright が入っていません。devDependencies に追加するか、入っているリポジトリで実行してください。`,
-  );
+  let storePath;
+  try {
+    storePath = execFileSync(
+      'nix',
+      ['build', 'nixpkgs#playwright-driver', '--no-link', '--print-out-paths'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] },
+    )
+      .trim()
+      .split('\n')
+      .pop();
+  } catch (e) {
+    throw new Error(
+      `${repo} に playwright-core / playwright が無く、Nix からの取得（nix build nixpkgs#playwright-driver）にも失敗しました: ${e.message}`,
+    );
+  }
+  return require(storePath).chromium;
 }
 
 /** Chrome の実行ファイル。UI_COMPARE_CHROME → Playwright の Chromium → システムの Chrome の順 */

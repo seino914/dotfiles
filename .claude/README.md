@@ -24,8 +24,8 @@
 | `skills/clean-branches/SKILL.md` | `/clean-branches` スキル：不要なローカルブランチの整理（未マージは確認後のみ）。`model: sonnet` |
 | `skills/merge-worktree/SKILL.md` | `/merge-worktree` スキル：自分が起動したサブエージェントのワークツリーを、完了後に未コミットで元の作業ツリーへ取り込んで削除する。モデルから呼べる |
 | `skills/git-pull/SKILL.md`・`pull.sh` | `/git-pull` スキル：カレントのリポジトリ（git リポジトリの外なら配下 3 階層までのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）へ切り替え、fetch して `git merge --ff-only` で最新化する。detached HEAD・デフォルトブランチ不明・未コミット変更のあるものはスキップし、失敗したら元のブランチへ戻す。ホームやその上位では拒否。`disable-model-invocation: true` |
-| `skills/ui-compare/`（`SKILL.md`・`prepare-before.sh`・`shoot.mjs`・`build-report.mjs`・`verify-report.mjs`・`lib.mjs`） | `/ui-compare` スキル：基準コミット（修正前）と作業ツリー（修正後）の開発サーバーを並べて起動し、ログインした実画面を同じ操作で撮って（対象リポジトリの Playwright を使う）、修正ごとに説明と修正前／修正後の画像を並べた 1 枚の HTML（画像は埋め込み）を作る。撮る画面と説明文は Claude が修正内容から決める。`model: sonnet`、`disable-model-invocation: true` |
-| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・CI・Dependabot・ブランチ自動削除を含む）。`model: sonnet` |
+| `skills/ui-compare/`（`SKILL.md`・`prepare-before.sh`・`shoot.mjs`・`build-report.mjs`・`verify-report.mjs`・`lib.mjs`） | `/ui-compare` スキル：基準コミット（修正前）と作業ツリー（修正後）の開発サーバーを並べて起動し、ログインした実画面を同じ操作で撮って（対象リポジトリの Playwright を使い、無ければ nixpkgs の `playwright-driver` を Nix ストアから取って使う）、修正ごとに説明と修正前／修正後の画像を並べた 1 枚の HTML（画像は埋め込み）を作る。撮る画面と説明文は Claude が修正内容から決める。`model: sonnet`、`disable-model-invocation: true` |
+| `skills/nix-setup/SKILL.md` | `/nix-setup` スキル：Nix devShell + direnv のセットアップ（linter / formatter・E2E テスト（任意・Playwright）・CI・Dependabot・ブランチ自動削除を含む）。`model: sonnet` |
 | `claude-notify.example.json` | iPhoneプッシュ通知（claude-notify）設定のテンプレート |
 | `setup.sh` | `.claude/` 配下（git管理ファイルのみ）を `~/.claude` へリンクするスクリプト |
 | `tests/` | `hooks/` のうち pr-mode.sh・guard-destructive.sh・verify-gate.sh・validate-claude-config.sh・notify.sh（この 5 本が「フック 5 本」）のテーブル駆動テスト、/git-pull の `pull.sh` の挙動テスト、一括実行スクリプト `run.sh`（配布対象外。`bash .claude/tests/run.sh`） |
