@@ -3,7 +3,7 @@
 # 作業ツリー・index・ref には書き込まない。
 #
 # 使い方: prepare-before.sh <出力先ディレクトリ> [基準 rev（既定 HEAD）]
-#   - git archive で基準のソースを展開
+#   - git archive で基準のソースを展開（/ui-compare --pr では修正後＝PR の最新コミットの展開にも使う）
 #   - 作業ツリーにある node_modules（ルートとサブディレクトリのアプリ・ワークスペース）を
 #     APFS clonefile（cp -c）で同じ相対位置へ複製（使えなければ通常のコピー）
 #   - 複製した node_modules の中の「作業ツリーを絶対パスで指す symlink」を複製先へ張り替える

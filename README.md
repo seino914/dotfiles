@@ -133,7 +133,7 @@ nix flake update
 - `/clean-branches`：ローカルブランチのうちデフォルトブランチ（main / master / develop 等）・使用中のブランチ以外を削除して整理する
 - `/git-pull`：カレントディレクトリのリポジトリ（配下に複数あればそのすべて）をデフォルトブランチ（origin/HEAD。無ければ origin の main / master）に切り替え、fetch して `git merge --ff-only` でローカルを最新にする
 - `/merge-worktree`：自分が起動したサブエージェントのワークツリーを、完了後に未コミットで元の作業ツリーへ取り込んで削除する（モデルから呼べる）
-- `/ui-compare`：修正前（基準コミット）と修正後（作業ツリー）の実画面を同じ操作で撮り、修正ごとに説明と画像を並べた比較 HTML を作る（ユーザー起動限定）
+- `/ui-compare`：修正前（基準コミット）と修正後（作業ツリー）の実画面を同じ操作で撮り、修正ごとに説明と画像を並べた比較 HTML を作る（`--pr` で PR と基点も比べられる。ユーザー起動限定）
 - `/nix-setup`：開発環境を Nix の devShell + direnv で用意し、linter / formatter・E2E テスト（任意・Playwright）・CI・Dependabot・マージ済みブランチ自動削除も整える
 
 ### セットアップスクリプト

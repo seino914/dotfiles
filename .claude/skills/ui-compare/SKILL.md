@@ -1,14 +1,14 @@
 ---
 name: ui-compare
-description: 修正前（基準コミット）と修正後（作業ツリー）の開発サーバーを並べて起動し、ログインした実画面を同じ操作で撮って、修正ごとに説明と「修正前／修正後」の画像を並べた 1 枚の比較 HTML（画像は埋め込み）を作る。/ui-compare でのみ起動。
+description: 修正前（基準コミット。--pr で PR の基点）と修正後（作業ツリー。--pr で PR の最新コミット）の開発サーバーを並べて起動し、ログインした実画面を同じ操作で撮って、修正ごとに説明と「修正前／修正後」の画像を並べた 1 枚の比較 HTML（画像は埋め込み）を作る。/ui-compare でのみ起動。
 disable-model-invocation: true
 model: sonnet
-argument-hint: "[比較したい修正の説明] [--base <rev>]"
+argument-hint: "[比較したい修正の説明] [--base <rev> | --pr [番号]]"
 ---
 
 # ui-compare（修正前後の比較レポート）
 
-修正前＝基準コミット（既定 HEAD。`git archive` で一時ディレクトリへ展開）、修正後＝作業ツリーとして、**ログインした実画面を同じ操作で撮り**、修正ごとに「説明＋修正前／修正後の画像」を並べた HTML を作る。対象は Node 系の開発サーバー。
+修正前＝基準コミット（既定 HEAD。`git archive` で一時ディレクトリへ展開）、修正後＝作業ツリーとして、**ログインした実画面を同じ操作で撮り**、修正ごとに「説明＋修正前／修正後の画像」を並べた HTML を作る。`--pr [番号]` なら、PR の基点と PR の最新コミットを比べる。対象は Node 系の開発サーバー。
 
 目的は**修正の内容を読み手に説明する資料**を作ること。撮る画面・操作・説明文は Claude が修正内容から決める。
 
@@ -27,7 +27,12 @@ W="/private/tmp/claude-$(id -u)/$(git rev-parse --show-toplevel | sed 's/[^A-Za-
 ### 1. 撮る修正を決める
 
 - 基準は引数の `--base`、無ければ HEAD。HEAD と作業ツリーに差分（未追跡ファイルを含む）が無ければ、基準のコミットを AskUserQuestion で聞く。
-- `git diff --stat <base>` と未追跡ファイル、会話でした修正の内容から、**画面で違いが見える修正**を選ぶ。
+- `--pr [番号]`（番号を省けば現在のブランチの PR）の場合は、次で決める。`--pr` と `--base` が両方あれば AskUserQuestion でどちらにするか聞く。上の「HEAD と作業ツリーに差分が無ければ聞く」規則は適用しない。
+  - `gh pr view [番号] --json number,url,title,body,baseRefName,baseRefOid,headRefOid` で取得する。PR が無ければ、そう報告して終える。
+  - `git fetch origin <baseRefName> pull/<番号>/head` で両側のコミットを取る（作業ツリー・現在のブランチには触れない。checkout・switch・branch 作成はしない）。
+  - 基点 `BASE=$(git merge-base <baseRefOid> <headRefOid>)`（GitHub の PR 差分と同じ基準。`origin/<baseRefName>` を使うと、マージ済みの PR では基点が最新と同じになる）、修正後 `HEAD_SHA=<headRefOid>` とする。以下の `<base>` は BASE を指す。
+  - 撮る修正は `git diff --stat <BASE> <HEAD_SHA>` と **PR のタイトル・本文**（あれば会話の内容も）から選ぶ。
+- `git diff --stat <base>`（PR モードは上の差分）と未追跡ファイル、会話でした修正の内容から、**画面で違いが見える修正**を選ぶ。
   - 見た目が変わる（配置・文言・書式・ダイアログ・404 など）
   - 操作の結果が変わる（失敗しても入力が残る、確認が出る、など）。**操作してから撮る**
 - 画面に出ない修正（データ・権限・計算・保存）は、画像にせず最後の表の節にまとめる。
@@ -40,6 +45,7 @@ bash ${CLAUDE_SKILL_DIR}/prepare-before.sh <作業ディレクトリ>/before-src
 ```
 
 - リポジトリの中で実行する（出力先が作業ツリーの中ならスクリプトが止める）。
+- PR モードの修正後側: `git rev-parse HEAD` が `<HEAD_SHA>` と一致し、かつ作業ツリーに未コミットの変更（未追跡を含む）が無ければ、従来どおり作業ツリーを修正後側にする。そうでなければ `bash ${CLAUDE_SKILL_DIR}/prepare-before.sh <作業ディレクトリ>/after-src <HEAD_SHA>` で展開し、それを修正後側にする。
 - 作業ツリーの `node_modules`（サブディレクトリのアプリ・ワークスペースのものも）を clonefile で同じ位置へ複製し、**作業ツリーを絶対パスで指す symlink を複製先へ張り替える**（`node_modules/node_modules` のような自己参照が残っていると、Turbopack が「filesystem root の外を指す」として依存を解決できず、修正前側の全ページが 500 になる）。張り替えるのは複製だけで、作業ツリーには触れない。
 - 未追跡の `.env*`（ルートと node_modules のあるディレクトリ）は中身を読まずにリンクする。
 
@@ -47,7 +53,8 @@ bash ${CLAUDE_SKILL_DIR}/prepare-before.sh <作業ディレクトリ>/before-src
 
 - 起動コマンド: パッケージマネージャは lockfile に合わせ、引数の前の `--` は npm だけに付ける（例: pnpm＋Next は `pnpm run dev -p <port>`、npm＋Vite は `npm run dev -- --port <port> --strictPort`、その他は `PORT=<port> pnpm run dev`）。`flake.nix` があれば `nix develop -c` を前に付ける。アプリがサブディレクトリなら、そのディレクトリへ `cd` してから起動する。
 - 修正前側は `cd <作業ディレクトリ>/before-src[/<サブディレクトリ>] && <起動コマンド>` を、Bash の `run_in_background` で起動する（ポートは例えば 3801）。
-- 修正後側は、作業ツリーの開発サーバーが既に動いていればそれを使う（待ち受けているプロセスの作業ディレクトリを `lsof -a -p <PID> -d cwd -Fn` で確かめる）。無ければ作業ツリーで同じように `run_in_background` で起動する（例えば 3802）。
+- 修正後側が `after-src` のときは、修正前側と同じく `cd <作業ディレクトリ>/after-src[/<サブディレクトリ>] && <起動コマンド>` を `run_in_background` で起動する（既存の開発サーバーは流用しない。ポートは例えば 3802）。
+- 修正後側が作業ツリーのときは、作業ツリーの開発サーバーが既に動いていればそれを使う（待ち受けているプロセスの作業ディレクトリを `lsof -a -p <PID> -d cwd -Fn` で確かめる）。無ければ作業ツリーで同じように `run_in_background` で起動する（例えば 3802）。
 - 使うポートは、起動前に `lsof -ti tcp:<port> -sTCP:LISTEN` が空であることを確かめる。埋まっていれば別のポートにする（他のプロセスには触れない）。自分が起動したサーバーのポートを控えておく。
 - 両方とも `/login` などが 200 を返すまで `curl` で待つ（初回のコンパイルは遅い）。修正前側が 500 なら、バックグラウンド実行の出力で原因を見る。
 
@@ -83,12 +90,12 @@ node ${CLAUDE_SKILL_DIR}/verify-report.mjs <作業ディレクトリ>/report.htm
 - build-report と verify の**両方の終了コードが 0** であること（「画像が無かったもの」が出ていない・「壊れた画像: 0／欠落した画像: 0」）を確かめ、`report-top.png` と節の画像を Read して崩れが無いか見る。
 - 説明文は利用者向けの言葉で書く（内部の関数名・ファイル名は出さない。必要なら `<code>` で最小限）。
   - 各節: `desc` に「どの画面で・どの条件で撮ったか」、`before` / `after` に「何が問題で、どう変わったか」
-  - 冒頭の `note` に撮り方（どの DB・どのアカウント・基準のコミット）と、**実在のデータを含むなら社外に出さない旨**
+  - 冒頭の `note` に撮り方（どの DB・どのアカウント・基準のコミット）と、**実在のデータを含むなら社外に出さない旨**。PR モードでは PR の番号・URL・基点と最新のコミット（短縮 SHA）も入れる
 
 ### 6. 片付けて報告する
 
 - 自分が起動したサーバーだけを `kill $(lsof -ti tcp:<port> -sTCP:LISTEN)` で止め、同じコマンドの `lsof` が空になったことを確かめる。既に動いていたものを使った場合、それは止めない。
-- 修正前のソース（`<作業ディレクトリ>/before-src`）を削除する。HTML・画像・仕様は残す。
+- 修正前のソース（`<作業ディレクトリ>/before-src`。作ったなら `after-src` も）を削除する。HTML・画像・仕様は残す。
 - `file://<作業ディレクトリ>/report.html` を伝え、一時領域なので再起動などで消える旨を添える。撮らなかった修正（操作の流れで起きるもの等）と、その理由を書き添える。
 
 ## 撮影の仕様（shots.json）
